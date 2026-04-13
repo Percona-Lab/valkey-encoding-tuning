@@ -109,7 +109,7 @@ func (v *ValkeyNode) analyze() error {
 			break
 		}
 	}
-	fmt.Printf("Analysis for node %s:\n", v.Address)
+	fmt.Printf("Analysis for node %s (%s=%d):\n", v.Address, listpackMaxConfig, v.maxListPackSize)
 	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
 	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
 	fmt.Printf("- largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
@@ -144,7 +144,7 @@ func main() {
 		}
 		nodes = append(nodes, v)
 	} else {
-		for _, et := range strings.Split(clusterNodes, "\n") {
+		for et := range strings.SplitSeq(clusterNodes, "\n") {
 			nodeDetails := strings.Split(et, " ")
 			if len(nodeDetails) < 8 {
 				continue
@@ -159,10 +159,26 @@ func main() {
 			}
 			nodes = append(nodes, node)
 		}
-		// add replica nodes from CLUSTER NODES command
 	}
+
+	clusterSummary := ValkeyNode{}
 	for _, v := range nodes {
 		v.getNodeConfig()
 		v.analyze()
+		runningTotalField := (clusterSummary.metrics.hashFieldCount + v.metrics.hashFieldCount)
+		runningTotalFieldSize := (float64(clusterSummary.metrics.hashFieldCount*int(clusterSummary.metrics.avgFieldSize)) + float64(v.metrics.hashFieldCount*int(v.metrics.avgFieldSize)))
+		clusterSummary.metrics.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
+		clusterSummary.metrics.hashFieldCount = runningTotalField
+		if v.metrics.maxFieldSize > clusterSummary.metrics.maxFieldSize {
+			clusterSummary.metrics.maxFieldSize = v.metrics.maxFieldSize
+			clusterSummary.metrics.maxField = v.metrics.maxField
+		}
+		clusterSummary.metrics.hashTableObjCount += v.metrics.hashTableObjCount
 	}
+	fmt.Printf("Analysis for cluster:\n")
+	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", clusterSummary.metrics.hashTableObjCount, clusterSummary.metrics.hashObjCount, (float64(clusterSummary.metrics.hashTableObjCount) / float64(clusterSummary.metrics.hashObjCount) * 100))
+	fmt.Printf("- hash fields count: %d\n", clusterSummary.metrics.hashFieldCount)
+	fmt.Printf("- largest hash field: %s, size:%d \n", clusterSummary.metrics.maxField, clusterSummary.metrics.maxFieldSize)
+	fmt.Printf("- avg field size: %.2f\n", clusterSummary.metrics.avgFieldSize)
+
 }
