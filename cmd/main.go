@@ -76,6 +76,7 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 			}
 		}
 		v.metrics.avgFieldSize = float64((fTotalSize + int(float64(v.metrics.hashFieldCount)*v.metrics.avgFieldSize)) / (v.metrics.hashFieldCount + fCount))
+		v.metrics.hashFieldCount += fCount
 		if cursor == 0 {
 			break
 		}
@@ -119,6 +120,64 @@ func (v *ValkeyNode) analyze() error {
 
 }
 
+func analyzeCluster(bootstrapNode ValkeyNode) {
+	var nodes []ValkeyNode
+
+	ctx := context.Background()
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{bootstrapNode.Address},
+		Username:    bootstrapNode.Username,
+		Password:    bootstrapNode.Password,
+	})
+	if err != nil {
+		panic(err)
+	}
+	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
+	if err != nil {
+		if err.Error() != errNotClusterMode {
+			panic(err)
+		}
+		nodes = append(nodes, bootstrapNode)
+	} else {
+		for et := range strings.SplitSeq(clusterNodes, "\n") {
+			nodeDetails := strings.Split(et, " ")
+			if len(nodeDetails) < 8 {
+				continue
+			}
+			if strings.Contains(nodeDetails[2], "master") {
+				continue
+			}
+			node := ValkeyNode{
+				Username: bootstrapNode.Username,
+				Password: bootstrapNode.Password,
+				Address:  strings.Split(nodeDetails[1], "@")[0],
+			}
+			nodes = append(nodes, node)
+		}
+	}
+
+	cs := ValkeyNode{}
+	for _, v := range nodes {
+		v.getNodeConfig()
+		v.analyze()
+		runningTotalField := (cs.metrics.hashFieldCount + v.metrics.hashFieldCount)
+		runningTotalFieldSize := (float64(cs.metrics.hashFieldCount*int(cs.metrics.avgFieldSize)) + float64(v.metrics.hashFieldCount*int(v.metrics.avgFieldSize)))
+		cs.metrics.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
+		cs.metrics.hashFieldCount = runningTotalField
+		if v.metrics.maxFieldSize > cs.metrics.maxFieldSize {
+			cs.metrics.maxFieldSize = v.metrics.maxFieldSize
+			cs.metrics.maxField = v.metrics.maxField
+		}
+		cs.metrics.hashTableObjCount += v.metrics.hashTableObjCount
+		cs.metrics.hashObjCount += v.metrics.hashObjCount
+	}
+	fmt.Printf("Analysis for cluster:\n")
+	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", cs.metrics.hashTableObjCount, cs.metrics.hashObjCount, (float64(cs.metrics.hashTableObjCount) / float64(cs.metrics.hashObjCount) * 100))
+	fmt.Printf("- hash fields count: %d\n", cs.metrics.hashFieldCount)
+	fmt.Printf("- largest hash field: %s, size:%d \n", cs.metrics.maxField, cs.metrics.maxFieldSize)
+	fmt.Printf("- avg field size: %.2f\n", cs.metrics.avgFieldSize)
+
+}
 func main() {
 	var bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
 	var bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
@@ -130,55 +189,5 @@ func main() {
 		Username: *bootstrapUsername,
 		Password: *bootstrapPassword,
 	}
-	var nodes []ValkeyNode
-
-	ctx := context.Background()
-	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{v.Address}})
-	if err != nil {
-		panic(err)
-	}
-	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
-	if err != nil {
-		if err.Error() != errNotClusterMode {
-			panic(err)
-		}
-		nodes = append(nodes, v)
-	} else {
-		for et := range strings.SplitSeq(clusterNodes, "\n") {
-			nodeDetails := strings.Split(et, " ")
-			if len(nodeDetails) < 8 {
-				continue
-			}
-			if strings.Contains(nodeDetails[2], "master") {
-				continue
-			}
-			node := ValkeyNode{
-				Username: v.Username,
-				Password: v.Password,
-				Address:  strings.Split(nodeDetails[1], "@")[0],
-			}
-			nodes = append(nodes, node)
-		}
-	}
-
-	clusterSummary := ValkeyNode{}
-	for _, v := range nodes {
-		v.getNodeConfig()
-		v.analyze()
-		runningTotalField := (clusterSummary.metrics.hashFieldCount + v.metrics.hashFieldCount)
-		runningTotalFieldSize := (float64(clusterSummary.metrics.hashFieldCount*int(clusterSummary.metrics.avgFieldSize)) + float64(v.metrics.hashFieldCount*int(v.metrics.avgFieldSize)))
-		clusterSummary.metrics.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
-		clusterSummary.metrics.hashFieldCount = runningTotalField
-		if v.metrics.maxFieldSize > clusterSummary.metrics.maxFieldSize {
-			clusterSummary.metrics.maxFieldSize = v.metrics.maxFieldSize
-			clusterSummary.metrics.maxField = v.metrics.maxField
-		}
-		clusterSummary.metrics.hashTableObjCount += v.metrics.hashTableObjCount
-	}
-	fmt.Printf("Analysis for cluster:\n")
-	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", clusterSummary.metrics.hashTableObjCount, clusterSummary.metrics.hashObjCount, (float64(clusterSummary.metrics.hashTableObjCount) / float64(clusterSummary.metrics.hashObjCount) * 100))
-	fmt.Printf("- hash fields count: %d\n", clusterSummary.metrics.hashFieldCount)
-	fmt.Printf("- largest hash field: %s, size:%d \n", clusterSummary.metrics.maxField, clusterSummary.metrics.maxFieldSize)
-	fmt.Printf("- avg field size: %.2f\n", clusterSummary.metrics.avgFieldSize)
-
+	analyzeCluster(v)
 }
