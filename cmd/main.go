@@ -3,57 +3,86 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/valkey-io/valkey-go"
 )
 
-func getNodeConfig(client valkey.Client) map[string]string {
+const (
+	listpackMaxConfig = "hash-max-listpack-value"
+)
+
+type ValkeyNodeMetrics struct {
+	hashObjCount      uint64
+	hashFieldCount    uint64
+	hashTableObjCount uint64
+	maxField          string
+	maxFieldSize      int
+}
+type ValkeyNode struct {
+	Username        string
+	Password        string
+	Address         string
+	Config          map[string]string
+	metrics         ValkeyNodeMetrics
+	maxListPackSize int
+}
+
+func (v *ValkeyNode) getNodeConfig() error {
 	ctx := context.Background()
-	config, err := client.Do(ctx, client.B().ConfigGet().Parameter("*").Build()).AsStrMap()
-	if err == nil {
-		return config
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{v.Address}})
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+	config, err := client.Do(ctx, client.B().ConfigGet().Parameter(listpackMaxConfig).Build()).AsStrMap()
+	if err != nil {
+		return err
+	}
+	v.maxListPackSize, err = strconv.Atoi(config[listpackMaxConfig])
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-func getMaxField(client valkey.Client, hash string) (string, int) {
+func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 	ctx := context.Background()
-	var maxField string
-	var maxFieldSize int
 	var cursor uint64
 	for {
-		resp := client.Do(ctx, client.B().Hscan().Key(hash).Cursor(cursor).Build())
+		resp := client.Do(
+			ctx,
+			client.B().Hscan().Key(hash).Cursor(cursor).Build(),
+		)
 		entry, err := resp.AsScanEntry()
 		if err != nil {
-			return "", 0
+			return err
 		}
 		for i := 0; i < len(entry.Elements); i += 2 {
-			// fmt.Printf("%s=%s\n", entry.Elements[i], entry.Elements[i+1])
-			if maxField == "" {
-				maxField = entry.Elements[i]
-				maxFieldSize = len(entry.Elements[i+1])
-			} else {
-				if maxFieldSize < len(entry.Elements[i+1]) {
-					maxField = entry.Elements[i]
-					maxFieldSize = len(entry.Elements[i+1])
-				}
+			fLen := len(entry.Elements[i+1])
+			if fLen >= v.maxListPackSize {
+				v.metrics.hashTableObjCount++
+			}
+			if fLen > v.metrics.maxFieldSize {
+				v.metrics.maxFieldSize = fLen
+				v.metrics.maxField = fmt.Sprintf("%s.%s", hash, entry.Elements[i])
 			}
 		}
 		if cursor == 0 {
 			break
 		}
 	}
-	return fmt.Sprintf("%s.%s", hash, maxField), int(maxFieldSize)
+	return nil
 }
 
-func findHashKeys(client valkey.Client) ([]string, error) {
+func (v *ValkeyNode) analyze() error {
 	ctx := context.Background()
-	var output []string
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{v.Address}})
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
 	var cursor uint64
-	var hashCount uint64
-	var hashtableObjCount uint64
-	var maxField string
-	var maxFieldSize int
 	for {
 		resp := client.Do(
 			ctx,
@@ -61,41 +90,29 @@ func findHashKeys(client valkey.Client) ([]string, error) {
 		)
 		entry, err := resp.AsScanEntry()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, key := range entry.Elements {
-			hashCount++
-			if typeCheck, _ := client.Do(ctx, client.B().ObjectEncoding().Key(key).Build()).ToString(); typeCheck == "hashtable" {
-				hashtableObjCount++
-				output = append(output, key)
-				// scan for maxfield
-				if maxField == "" {
-					maxField, maxFieldSize = getMaxField(client, key)
-				} else {
-					cMaxField, cMaxFieldSize := getMaxField(client, key)
-					if cMaxFieldSize > maxFieldSize {
-						maxField, maxFieldSize = cMaxField, cMaxFieldSize
-					}
-				}
-			}
+			v.metrics.hashObjCount++
+			v.analyzeHashField(client, key)
 		}
 		cursor = entry.Cursor
 		if cursor == 0 {
 			break
 		}
 	}
-	fmt.Printf("hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", hashtableObjCount, hashCount, (float64(hashtableObjCount) / float64(hashCount) * 100))
-	fmt.Printf("largest hash field: %s, size:%d \n", maxField, maxFieldSize)
-	return output, nil
+	fmt.Printf("hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
+	fmt.Printf("hash fields count: %d\n", v.metrics.hashFieldCount)
+	fmt.Printf("largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
+
+	return nil
+
 }
 
 func main() {
-	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{"127.0.0.1:6379"}})
-	if err != nil {
-		panic(err)
+	v := ValkeyNode{
+		Address: "127.0.0.1:6379",
 	}
-	defer client.Close()
-	// ctx := context.Background()
-	getNodeConfig(client)
-	findHashKeys(client)
+	v.getNodeConfig()
+	v.analyze()
 }
