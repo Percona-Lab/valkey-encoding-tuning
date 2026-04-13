@@ -30,3 +30,7 @@ vet:
 .PHONY: run
 run: fmt vet
 	go run ./...
+
+.PHONY: build
+build: fmt vet
+	go build -o bin/valkey-encoding-analyzer cmd/main.go

@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/valkey-io/valkey-go"
 )
 
 const (
 	listpackMaxConfig = "hash-max-listpack-value"
+	errNotClusterMode = "This instance has cluster support disabled"
 )
 
 type ValkeyNodeMetrics struct {
@@ -106,19 +109,60 @@ func (v *ValkeyNode) analyze() error {
 			break
 		}
 	}
-	fmt.Printf("hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
-	fmt.Printf("hash fields count: %d\n", v.metrics.hashFieldCount)
-	fmt.Printf("largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
-	fmt.Printf("avg field size: %.2f\n", v.metrics.avgFieldSize)
+	fmt.Printf("Analysis for node %s:\n", v.Address)
+	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
+	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
+	fmt.Printf("- largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
+	fmt.Printf("- avg field size: %.2f\n", v.metrics.avgFieldSize)
 
 	return nil
 
 }
 
 func main() {
+	var bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
+	var bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
+	var bootstrapUsername = flag.String("username", "", "name of the Valkey user")
+	flag.Parse()
+
 	v := ValkeyNode{
-		Address: "127.0.0.1:6379",
+		Address:  *bootstrapAddress,
+		Username: *bootstrapUsername,
+		Password: *bootstrapPassword,
 	}
-	v.getNodeConfig()
-	v.analyze()
+	var nodes []ValkeyNode
+
+	ctx := context.Background()
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{v.Address}})
+	if err != nil {
+		panic(err)
+	}
+	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
+	if err != nil {
+		if err.Error() != errNotClusterMode {
+			panic(err)
+		}
+		nodes = append(nodes, v)
+	} else {
+		for _, et := range strings.Split(clusterNodes, "\n") {
+			nodeDetails := strings.Split(et, " ")
+			if len(nodeDetails) < 8 {
+				continue
+			}
+			if strings.Contains(nodeDetails[2], "master") {
+				continue
+			}
+			node := ValkeyNode{
+				Username: v.Username,
+				Password: v.Password,
+				Address:  strings.Split(nodeDetails[1], "@")[0],
+			}
+			nodes = append(nodes, node)
+		}
+		// add replica nodes from CLUSTER NODES command
+	}
+	for _, v := range nodes {
+		v.getNodeConfig()
+		v.analyze()
+	}
 }
