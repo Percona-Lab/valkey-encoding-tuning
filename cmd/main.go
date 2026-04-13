@@ -14,9 +14,10 @@ const (
 
 type ValkeyNodeMetrics struct {
 	hashObjCount      uint64
-	hashFieldCount    uint64
+	hashFieldCount    int
 	hashTableObjCount uint64
 	maxField          string
+	avgFieldSize      float64
 	maxFieldSize      int
 }
 type ValkeyNode struct {
@@ -58,16 +59,20 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 		if err != nil {
 			return err
 		}
+		fCount := len(entry.Elements) / 2
+		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i += 2 {
-			fLen := len(entry.Elements[i+1])
-			if fLen >= v.maxListPackSize {
+			fSize := len(entry.Elements[i+1])
+			fTotalSize += fSize
+			if fSize >= v.maxListPackSize {
 				v.metrics.hashTableObjCount++
 			}
-			if fLen > v.metrics.maxFieldSize {
-				v.metrics.maxFieldSize = fLen
+			if fSize > v.metrics.maxFieldSize {
+				v.metrics.maxFieldSize = fSize
 				v.metrics.maxField = fmt.Sprintf("%s.%s", hash, entry.Elements[i])
 			}
 		}
+		v.metrics.avgFieldSize = float64((fTotalSize + int(float64(v.metrics.hashFieldCount)*v.metrics.avgFieldSize)) / (v.metrics.hashFieldCount + fCount))
 		if cursor == 0 {
 			break
 		}
@@ -104,6 +109,7 @@ func (v *ValkeyNode) analyze() error {
 	fmt.Printf("hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
 	fmt.Printf("hash fields count: %d\n", v.metrics.hashFieldCount)
 	fmt.Printf("largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
+	fmt.Printf("avg field size: %.2f\n", v.metrics.avgFieldSize)
 
 	return nil
 
