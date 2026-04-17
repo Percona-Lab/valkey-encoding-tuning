@@ -16,7 +16,7 @@ const (
 )
 
 type ValkeyNodeMetrics struct {
-	hashObjCount      uint64
+	hashObjCount      int
 	hashFieldCount    int
 	hashTableObjCount uint64
 	maxField          string
@@ -69,6 +69,7 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 			fTotalSize += fSize
 			if fSize >= v.maxListPackSize {
 				v.metrics.hashTableObjCount++
+				// fmt.Printf("- %s exceeded hash-max-listpack-value by %d\n", fmt.Sprintf("%s.%s", hash, entry.Elements[i]), fSize-v.maxListPackSize)
 			}
 			if fSize > v.metrics.maxFieldSize {
 				v.metrics.maxFieldSize = fSize
@@ -77,6 +78,7 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 		}
 		v.metrics.avgFieldSize = float64((fTotalSize + int(float64(v.metrics.hashFieldCount)*v.metrics.avgFieldSize)) / (v.metrics.hashFieldCount + fCount))
 		v.metrics.hashFieldCount += fCount
+		cursor = entry.Cursor
 		if cursor == 0 {
 			break
 		}
@@ -86,11 +88,18 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 
 func (v *ValkeyNode) analyze() error {
 	ctx := context.Background()
-	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{v.Address}})
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress:       []string{v.Address},
+		ForceSingleClient: true,
+	})
 	if err != nil {
 		panic(err)
 	}
 	defer client.Close()
+	err = client.Do(ctx, client.B().Readonly().Build()).Error()
+	if err != nil {
+		panic(err)
+	}
 	var cursor uint64
 	for {
 		resp := client.Do(
@@ -101,15 +110,21 @@ func (v *ValkeyNode) analyze() error {
 		if err != nil {
 			return err
 		}
+		// fmt.Printf("in_cursor=%d out_cursor=%d keys=%d\n",
+		// cursor, entry.Cursor, len(entry.Elements))
+		v.metrics.hashObjCount += len(entry.Elements)
 		for _, key := range entry.Elements {
-			v.metrics.hashObjCount++
-			v.analyzeHashField(client, key)
+			err = v.analyzeHashField(client, key)
+			if err != nil {
+				panic(err)
+			}
 		}
 		cursor = entry.Cursor
 		if cursor == 0 {
 			break
 		}
 	}
+	fmt.Println("-------------------")
 	fmt.Printf("Analysis for node %s (%s=%d):\n", v.Address, listpackMaxConfig, v.maxListPackSize)
 	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
 	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
@@ -120,7 +135,7 @@ func (v *ValkeyNode) analyze() error {
 
 }
 
-func analyzeCluster(bootstrapNode ValkeyNode) {
+func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 	var nodes []ValkeyNode
 
 	ctx := context.Background()
@@ -132,6 +147,7 @@ func analyzeCluster(bootstrapNode ValkeyNode) {
 	if err != nil {
 		panic(err)
 	}
+	defer client.Close()
 	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
 	if err != nil {
 		if err.Error() != errNotClusterMode {
@@ -144,7 +160,8 @@ func analyzeCluster(bootstrapNode ValkeyNode) {
 			if len(nodeDetails) < 8 {
 				continue
 			}
-			if strings.Contains(nodeDetails[2], "master") {
+			flags := nodeDetails[2]
+			if !strings.Contains(flags, "master") {
 				continue
 			}
 			node := ValkeyNode{
@@ -155,7 +172,10 @@ func analyzeCluster(bootstrapNode ValkeyNode) {
 			nodes = append(nodes, node)
 		}
 	}
-
+	return nodes
+}
+func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
+	nodes := getClusterNodes(bootstrapNode)
 	cs := ValkeyNode{}
 	for _, v := range nodes {
 		v.getNodeConfig()
@@ -171,12 +191,14 @@ func analyzeCluster(bootstrapNode ValkeyNode) {
 		cs.metrics.hashTableObjCount += v.metrics.hashTableObjCount
 		cs.metrics.hashObjCount += v.metrics.hashObjCount
 	}
+
+	fmt.Println("-----------------")
 	fmt.Printf("Analysis for cluster:\n")
 	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", cs.metrics.hashTableObjCount, cs.metrics.hashObjCount, (float64(cs.metrics.hashTableObjCount) / float64(cs.metrics.hashObjCount) * 100))
 	fmt.Printf("- hash fields count: %d\n", cs.metrics.hashFieldCount)
 	fmt.Printf("- largest hash field: %s, size:%d \n", cs.metrics.maxField, cs.metrics.maxFieldSize)
 	fmt.Printf("- avg field size: %.2f\n", cs.metrics.avgFieldSize)
-
+	return cs
 }
 func main() {
 	var bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
