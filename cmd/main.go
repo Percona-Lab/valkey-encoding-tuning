@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/caio/go-tdigest"
 	"github.com/valkey-io/valkey-go"
 )
 
@@ -16,6 +17,7 @@ const (
 )
 
 type ValkeyNodeMetrics struct {
+	tdigest           *tdigest.TDigest
 	hashObjCount      int
 	hashFieldCount    int
 	hashTableObjCount uint64
@@ -66,6 +68,7 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i += 2 {
 			fSize := len(entry.Elements[i+1])
+			v.metrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
 			if fSize >= v.maxListPackSize {
 				v.metrics.hashTableObjCount++
@@ -130,7 +133,15 @@ func (v *ValkeyNode) analyze() error {
 	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
 	fmt.Printf("- largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
 	fmt.Printf("- avg field size: %.2f\n", v.metrics.avgFieldSize)
-
+	fmt.Printf(`- hash fields' size distribution:
++ Quartile 1 (P25): %.2f
++ Quartile 2 (P50): %.2f
++ Quartile 3 (P75): %.2f
++ Quartile 4 (P99): %.2f
+`, v.metrics.tdigest.Quantile(.25),
+		v.metrics.tdigest.Quantile(0.5),
+		v.metrics.tdigest.Quantile(0.75),
+		v.metrics.tdigest.Quantile(0.99))
 	return nil
 
 }
@@ -164,10 +175,14 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 			if !strings.Contains(flags, "master") {
 				continue
 			}
+			t, _ := tdigest.New()
 			node := ValkeyNode{
 				Username: bootstrapNode.Username,
 				Password: bootstrapNode.Password,
 				Address:  strings.Split(nodeDetails[1], "@")[0],
+				metrics: ValkeyNodeMetrics{
+					tdigest: t,
+				},
 			}
 			nodes = append(nodes, node)
 		}
@@ -176,7 +191,12 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 }
 func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	nodes := getClusterNodes(bootstrapNode)
-	cs := ValkeyNode{}
+	t, _ := tdigest.New()
+	cs := ValkeyNode{
+		metrics: ValkeyNodeMetrics{
+			tdigest: t,
+		},
+	}
 	for _, v := range nodes {
 		v.getNodeConfig()
 		v.analyze()
@@ -190,6 +210,7 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		}
 		cs.metrics.hashTableObjCount += v.metrics.hashTableObjCount
 		cs.metrics.hashObjCount += v.metrics.hashObjCount
+		cs.metrics.tdigest.Merge(v.metrics.tdigest)
 	}
 
 	fmt.Println("-----------------")
@@ -198,6 +219,15 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	fmt.Printf("- hash fields count: %d\n", cs.metrics.hashFieldCount)
 	fmt.Printf("- largest hash field: %s, size:%d \n", cs.metrics.maxField, cs.metrics.maxFieldSize)
 	fmt.Printf("- avg field size: %.2f\n", cs.metrics.avgFieldSize)
+	fmt.Printf(`- hash fields' size distribution:
++ Quartile 1 (P25): %.2f
++ Quartile 2 (P50): %.2f
++ Quartile 3 (P75): %.2f
++ Quartile 4 (P99): %.2f
+`, cs.metrics.tdigest.Quantile(.25),
+		cs.metrics.tdigest.Quantile(0.5),
+		cs.metrics.tdigest.Quantile(0.75),
+		cs.metrics.tdigest.Quantile(0.99))
 	return cs
 }
 func main() {
