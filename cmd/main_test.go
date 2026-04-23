@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/caio/go-tdigest"
 	"github.com/go-faker/faker/v4"
 	. "github.com/onsi/gomega"
 	"github.com/valkey-io/valkey-go"
@@ -25,6 +26,7 @@ func TestAnalyzeNode(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+	client.Do(ctx, client.B().Flushdb().Build())
 	for i := range 1000 {
 		var dsc string
 		if v, _ := faker.RandomInt(1, 10); v[0] > 5 {
@@ -38,9 +40,10 @@ func TestAnalyzeNode(t *testing.T) {
 			Build()
 		client.Do(ctx, cmd)
 	}
-
+	td, _ := tdigest.New()
 	v := ValkeyNode{
 		Address: "127.0.0.1:6379",
+		metrics: ValkeyNodeMetrics{tdigest: td},
 	}
 	v.getNodeConfig()
 	v.analyze()

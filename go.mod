@@ -5,6 +5,7 @@ go 1.25.8
 require github.com/valkey-io/valkey-go v1.0.73
 
 require (
+	github.com/caio/go-tdigest v3.1.0+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.49.0 // indirect
