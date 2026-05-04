@@ -72,7 +72,6 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 			fTotalSize += fSize
 			if fSize >= v.maxListPackSize {
 				v.metrics.hashTableObjCount++
-				// fmt.Printf("- %s exceeded hash-max-listpack-value by %d\n", fmt.Sprintf("%s.%s", hash, entry.Elements[i]), fSize-v.maxListPackSize)
 			}
 			if fSize > v.metrics.maxFieldSize {
 				v.metrics.maxFieldSize = fSize
@@ -175,7 +174,10 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 			if !strings.Contains(flags, "master") {
 				continue
 			}
-			t, _ := tdigest.New()
+			t, err := tdigest.New()
+			if err != nil {
+				panic(err)
+			}
 			node := ValkeyNode{
 				Username: bootstrapNode.Username,
 				Password: bootstrapNode.Password,
