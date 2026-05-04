@@ -31,6 +31,10 @@ vet:
 run: fmt vet
 	go run ./...
 
+.PHONY: test
+test: fmt vet
+	if [[ -z "${TEST}" ]]; then go test ./... -v; else go test ./... -v -run "${TEST}"; fi
+
 .PHONY: build
 build: fmt vet
 	go build -o bin/valkey-encoding-analyzer cmd/main.go
