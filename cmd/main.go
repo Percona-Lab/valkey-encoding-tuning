@@ -16,6 +16,10 @@ const (
 	errNotClusterMode = "This instance has cluster support disabled"
 )
 
+var (
+	keyPattern string
+)
+
 type ValkeyNodeMetrics struct {
 	tdigest           *tdigest.TDigest
 	hashObjCount      int
@@ -104,16 +108,19 @@ func (v *ValkeyNode) analyze() error {
 	}
 	var cursor uint64
 	for {
+		scanCmd := client.B().Scan().Cursor(cursor)
+		if keyPattern != "" {
+			scanCmd.Match(keyPattern)
+		}
+		scanCmd.Type("hash")
 		resp := client.Do(
 			ctx,
-			client.B().Scan().Cursor(cursor).Type("hash").Build(),
+			scanCmd.Build(),
 		)
 		entry, err := resp.AsScanEntry()
 		if err != nil {
 			return err
 		}
-		// fmt.Printf("in_cursor=%d out_cursor=%d keys=%d\n",
-		// cursor, entry.Cursor, len(entry.Elements))
 		v.metrics.hashObjCount += len(entry.Elements)
 		for _, key := range entry.Elements {
 			err = v.analyzeHashField(client, key)
@@ -235,9 +242,10 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 func main() {
 	var bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
 	var bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
-	var bootstrapUsername = flag.String("username", "", "name of the Valkey user")
+	var bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
+	var k = flag.String("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
 	flag.Parse()
-
+	keyPattern = *k
 	v := ValkeyNode{
 		Address:  *bootstrapAddress,
 		Username: *bootstrapUsername,
