@@ -4,11 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/caio/go-tdigest/v5"
+	"github.com/valkey-io/valkey-go"
+	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/caio/go-tdigest"
-	"github.com/valkey-io/valkey-go"
 )
 
 const (
@@ -17,7 +17,13 @@ const (
 )
 
 var (
-	keyPattern string
+	bootstrapAddress  *string
+	bootstrapUsername *string
+	bootstrapPassword *string
+	keyPattern        *string
+	fieldPattern      *string
+	fieldPatternRE    *regexp.Regexp
+	printOutput       *bool
 )
 
 type ValkeyNodeMetrics struct {
@@ -30,8 +36,6 @@ type ValkeyNodeMetrics struct {
 	maxFieldSize      int
 }
 type ValkeyNode struct {
-	Username        string
-	Password        string
 	Address         string
 	Config          map[string]string
 	metrics         ValkeyNodeMetrics
@@ -40,10 +44,7 @@ type ValkeyNode struct {
 
 func (v *ValkeyNode) getNodeConfig() error {
 	ctx := context.Background()
-	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{v.Address}})
-	if err != nil {
-		panic(err)
-	}
+	client := createClient(v.Address)
 	defer client.Close()
 	config, err := client.Do(ctx, client.B().ConfigGet().Parameter(listpackMaxConfig).Build()).AsStrMap()
 	if err != nil {
@@ -68,9 +69,13 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 		if err != nil {
 			return err
 		}
-		fCount := len(entry.Elements) / 2
+		fCount := 0
 		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i += 2 {
+			if fieldPatternRE != nil && !fieldPatternRE.MatchString(entry.Elements[i]) {
+				continue
+			}
+			fCount++
 			fSize := len(entry.Elements[i+1])
 			v.metrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
@@ -82,8 +87,10 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 				v.metrics.maxField = fmt.Sprintf("%s.%s", hash, entry.Elements[i])
 			}
 		}
-		v.metrics.avgFieldSize = float64((fTotalSize + int(float64(v.metrics.hashFieldCount)*v.metrics.avgFieldSize)) / (v.metrics.hashFieldCount + fCount))
-		v.metrics.hashFieldCount += fCount
+		if fCount > 0 {
+			v.metrics.avgFieldSize = float64((fTotalSize + int(float64(v.metrics.hashFieldCount)*v.metrics.avgFieldSize)) / (v.metrics.hashFieldCount + fCount))
+			v.metrics.hashFieldCount += fCount
+		}
 		cursor = entry.Cursor
 		if cursor == 0 {
 			break
@@ -92,25 +99,65 @@ func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
 	return nil
 }
 
-func (v *ValkeyNode) analyze() error {
-	ctx := context.Background()
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress:       []string{v.Address},
-		ForceSingleClient: true,
-	})
+func (v *ValkeyNode) printNodeAnalysis() {
+	if !*printOutput {
+		return
+	}
+	fmt.Println("-------------------")
+	fmt.Printf("Analysis for node %s (%s=%d):\n", v.Address, listpackMaxConfig, v.maxListPackSize)
+	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
+	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
+	fmt.Printf("- largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
+	fmt.Printf("- avg field size: %.2f\n", v.metrics.avgFieldSize)
+	fmt.Printf(`- hash fields' size distribution:
++ Quartile 1 (P25): %.2f
++ Quartile 2 (P50): %.2f
++ Quartile 3 (P75): %.2f
++ Quartile 4 (P99): %.2f
+`, v.metrics.tdigest.Quantile(.25),
+		v.metrics.tdigest.Quantile(0.5),
+		v.metrics.tdigest.Quantile(0.75),
+		v.metrics.tdigest.Quantile(0.99))
+}
+
+func createClient(address string) valkey.Client {
+	var clientOption valkey.ClientOption
+	if strings.Contains(address, ":") {
+		clientOption = valkey.ClientOption{
+			InitAddress:       []string{address},
+			ForceSingleClient: true,
+		}
+	} else {
+		clientOption = valkey.MustParseURL("unix://" + address)
+		clientOption.ForceSingleClient = true
+	}
+	if bootstrapUsername != nil && *bootstrapUsername != "" {
+		clientOption.Username = *bootstrapUsername
+	}
+	if bootstrapPassword != nil && *bootstrapPassword != "" {
+		clientOption.Password = *bootstrapPassword
+	}
+	client, err := valkey.NewClient(clientOption)
 	if err != nil {
 		panic(err)
 	}
+	return client
+}
+
+func (v *ValkeyNode) analyze() error {
+	ctx := context.Background()
+
+	client := createClient(v.Address)
 	defer client.Close()
-	err = client.Do(ctx, client.B().Readonly().Build()).Error()
+	err := client.Do(ctx, client.B().Readonly().Build()).Error()
 	if err != nil {
 		panic(err)
 	}
 	var cursor uint64
 	for {
 		scanCmd := client.B().Scan().Cursor(cursor)
-		if keyPattern != "" {
-			scanCmd.Match(keyPattern)
+		if *keyPattern != "" {
+			scanCmd.Match(*keyPattern)
 		}
 		scanCmd.Type("hash")
 		resp := client.Do(
@@ -133,21 +180,7 @@ func (v *ValkeyNode) analyze() error {
 			break
 		}
 	}
-	fmt.Println("-------------------")
-	fmt.Printf("Analysis for node %s (%s=%d):\n", v.Address, listpackMaxConfig, v.maxListPackSize)
-	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
-	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
-	fmt.Printf("- largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
-	fmt.Printf("- avg field size: %.2f\n", v.metrics.avgFieldSize)
-	fmt.Printf(`- hash fields' size distribution:
-+ Quartile 1 (P25): %.2f
-+ Quartile 2 (P50): %.2f
-+ Quartile 3 (P75): %.2f
-+ Quartile 4 (P99): %.2f
-`, v.metrics.tdigest.Quantile(.25),
-		v.metrics.tdigest.Quantile(0.5),
-		v.metrics.tdigest.Quantile(0.75),
-		v.metrics.tdigest.Quantile(0.99))
+	v.printNodeAnalysis()
 	return nil
 
 }
@@ -156,14 +189,7 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 	var nodes []ValkeyNode
 
 	ctx := context.Background()
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{bootstrapNode.Address},
-		Username:    bootstrapNode.Username,
-		Password:    bootstrapNode.Password,
-	})
-	if err != nil {
-		panic(err)
-	}
+	client := createClient(bootstrapNode.Address)
 	defer client.Close()
 	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
 	if err != nil {
@@ -186,9 +212,7 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 				panic(err)
 			}
 			node := ValkeyNode{
-				Username: bootstrapNode.Username,
-				Password: bootstrapNode.Password,
-				Address:  strings.Split(nodeDetails[1], "@")[0],
+				Address: strings.Split(nodeDetails[1], "@")[0],
 				metrics: ValkeyNodeMetrics{
 					tdigest: t,
 				},
@@ -221,35 +245,51 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		cs.metrics.hashObjCount += v.metrics.hashObjCount
 		cs.metrics.tdigest.Merge(v.metrics.tdigest)
 	}
-
-	fmt.Println("-----------------")
-	fmt.Printf("Analysis for cluster:\n")
-	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", cs.metrics.hashTableObjCount, cs.metrics.hashObjCount, (float64(cs.metrics.hashTableObjCount) / float64(cs.metrics.hashObjCount) * 100))
-	fmt.Printf("- hash fields count: %d\n", cs.metrics.hashFieldCount)
-	fmt.Printf("- largest hash field: %s, size:%d \n", cs.metrics.maxField, cs.metrics.maxFieldSize)
-	fmt.Printf("- avg field size: %.2f\n", cs.metrics.avgFieldSize)
-	fmt.Printf(`- hash fields' size distribution:
-+ Quartile 1 (P25): %.2f
-+ Quartile 2 (P50): %.2f
-+ Quartile 3 (P75): %.2f
-+ Quartile 4 (P99): %.2f
-`, cs.metrics.tdigest.Quantile(.25),
-		cs.metrics.tdigest.Quantile(0.5),
-		cs.metrics.tdigest.Quantile(0.75),
-		cs.metrics.tdigest.Quantile(0.99))
+	cs.printNodeAnalysis()
 	return cs
 }
+
+func registerStringFlag(name string, value string, usage string) *string {
+	var output string
+	if flag.Lookup(name) == nil {
+		flag.StringVar(&output, name, value, usage)
+	} else {
+		output = flag.Lookup(name).Value.(flag.Getter).Get().(string)
+	}
+	return &output
+}
+func registerBoolFlag(name string, value bool, usage string) *bool {
+	var output bool
+	if flag.Lookup(name) == nil {
+		flag.BoolVar(&output, name, value, usage)
+	} else {
+		output = flag.Lookup(name).Value.(flag.Getter).Get().(bool)
+	}
+	return &output
+
+}
+func initFlags() {
+	bootstrapAddress = registerStringFlag("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
+	bootstrapPassword = registerStringFlag("password", "", "Password of the Valkey user")
+	bootstrapUsername = registerStringFlag("username", "", "Name of the Valkey user")
+	keyPattern = registerStringFlag("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
+	fieldPattern = registerStringFlag("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
+	printOutput = registerBoolFlag("print-output", true, "Print output to stdout")
+}
+func parseArguments() {
+	if *fieldPattern != "" {
+		fieldPatternRE = regexp.MustCompile(*fieldPattern)
+	} else {
+		fieldPatternRE = nil
+	}
+}
+
 func main() {
-	var bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
-	var bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
-	var bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
-	var k = flag.String("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
 	flag.Parse()
-	keyPattern = *k
+	initFlags()
+	parseArguments()
 	v := ValkeyNode{
-		Address:  *bootstrapAddress,
-		Username: *bootstrapUsername,
-		Password: *bootstrapPassword,
+		Address: *bootstrapAddress,
 	}
 	analyzeCluster(v)
 }
