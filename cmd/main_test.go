@@ -4,10 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/caio/go-tdigest/v5"
 	"github.com/go-faker/faker/v4"
@@ -21,18 +24,95 @@ type Item struct {
 	Price       int
 }
 
+func initTestFlags(t *testing.T) {
+	t.Helper()
+
+	oldCommandLine := flag.CommandLine
+	oldBootstrapAddress := bootstrapAddress
+	oldBootstrapUsername := bootstrapUsername
+	oldBootstrapPassword := bootstrapPassword
+	oldKeyPattern := keyPattern
+	oldFieldPattern := fieldPattern
+	oldFieldPatternRE := fieldPatternRE
+	oldPrintOutput := printOutput
+	oldFlagsInitialized := flagsInitialized
+
+	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	flagsInitialized = nil
+	fieldPatternRE = nil
+	initFlags()
+
+	t.Cleanup(func() {
+		flag.CommandLine = oldCommandLine
+		bootstrapAddress = oldBootstrapAddress
+		bootstrapUsername = oldBootstrapUsername
+		bootstrapPassword = oldBootstrapPassword
+		keyPattern = oldKeyPattern
+		fieldPattern = oldFieldPattern
+		fieldPatternRE = oldFieldPatternRE
+		printOutput = oldPrintOutput
+		flagsInitialized = oldFlagsInitialized
+	})
+}
+
+func setTestFlag(t *testing.T, name string, value string) {
+	t.Helper()
+	if err := flag.Set(name, value); err != nil {
+		t.Fatalf("set flag %q: %v", name, err)
+	}
+}
+
+func cleanupValkeyInstance(address string, client valkey.Client) {
+	if client != nil {
+		_ = client.Do(context.Background(), client.B().Shutdown().Build()).Error()
+		client.Close()
+	}
+	if address != "" {
+		dir := filepath.Dir(address)
+		if strings.HasPrefix(filepath.Base(dir), "valkey-test-") {
+			_ = os.RemoveAll(dir)
+			return
+		}
+		_ = os.Remove(address)
+	}
+}
+
 // create a Valkey test instance, only allow connections by socket
 // return the path to the socket
 func createValkeyInstance() string {
-	tmpDir := os.TempDir()
-	os.MkdirAll(tmpDir, 0755)
-	addr := filepath.Join(tmpDir, "valkey.sock")
-	cmd := exec.Command("valkey-server", "--unixsocket", addr, "--daemonize yes")
-	_, err := cmd.CombinedOutput()
+	tmpDir, err := os.MkdirTemp("", "valkey-test-*")
 	if err != nil {
 		panic(err)
 	}
-	return addr
+	addr := filepath.Join(tmpDir, "valkey.sock")
+	logPath := filepath.Join(tmpDir, "valkey.log")
+	cmd := exec.Command(
+		"valkey-server",
+		"--port", "0",
+		"--unixsocket", addr,
+		"--unixsocketperm", "700",
+		"--daemonize", "yes",
+		"--save", "",
+		"--appendonly", "no",
+		"--dir", tmpDir,
+		"--logfile", logPath,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		panic(fmt.Sprintf("start valkey-server: %v\n%s", err, string(output)))
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(addr); err == nil {
+			return addr
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	logOutput, _ := os.ReadFile(logPath)
+	_ = os.RemoveAll(tmpDir)
+	panic(fmt.Sprintf("valkey-server did not create socket %s within 5s\n%s", addr, string(logOutput)))
 }
 
 func generateTestData(client valkey.Client, entriesCount int) {
@@ -56,53 +136,57 @@ func generateTestData(client valkey.Client, entriesCount int) {
 }
 
 func TestAnalyzeNode(t *testing.T) {
-	g := NewWithT(t)
+	initTestFlags(t)
+
 	hashKeysCount := 1000
 	var address string
 	var client valkey.Client
-	t.Run("setup env", func(t *testing.T) {
+	if !t.Run("setup env", func(t *testing.T) {
+		g := NewWithT(t)
 		address = createValkeyInstance()
 		g.Eventually(address).To(BeAnExistingFile())
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
-	})
+	}) {
+		return
+	}
 
 	t.Run("test", func(t *testing.T) {
+		g := NewWithT(t)
 		td, _ := tdigest.New()
 		v := ValkeyNode{
 			Address: address,
 			metrics: ValkeyNodeMetrics{tdigest: td},
 		}
-		initFlags()
-		flag.Set("print-output", "false")
-		flag.Parse()
+		setTestFlag(t, "print-output", "false")
+		parseArguments()
 
-		v.getNodeConfig()
-		v.analyze()
+		g.Expect(v.getNodeConfig()).To(Succeed())
+		g.Expect(v.analyze()).To(Succeed())
 		g.Expect(v.metrics.hashObjCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Shutdown().Build())
-		os.Remove(address)
-		client.Close()
+		cleanupValkeyInstance(address, client)
 	})
 
 }
 func TestAnalyzeCluster(t *testing.T) {
-	g := NewWithT(t)
+	initTestFlags(t)
+
 	hashKeysCount := 1000
-	address := "127.0.0.1:30005"
+	var address string
 	var client valkey.Client
-	t.Run("setup env", func(t *testing.T) {
-		// address = createValkeyInstance()
-		// g.Eventually(address).To(BeAnExistingFile())
+	if !t.Run("setup env", func(t *testing.T) {
+		address = createValkeyInstance()
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
-	})
+	}) {
+		return
+	}
 	t.Run("test", func(t *testing.T) {
-		initFlags()
-		flag.Set("print-output", "false")
-		flag.Parse()
+		g := NewWithT(t)
+		setTestFlag(t, "print-output", "false")
+		parseArguments()
 
 		cs := analyzeCluster(ValkeyNode{
 			Address: address,
@@ -111,173 +195,185 @@ func TestAnalyzeCluster(t *testing.T) {
 
 	})
 	t.Cleanup(func() {
-		// client.Do(context.Background(), client.B().Shutdown().Build())
-		// os.Remove(address)
-		client.Close()
+		cleanupValkeyInstance(address, client)
 	})
 
 }
 
 func TestScanCluster(t *testing.T) {
-	g := NewWithT(t)
-	address := "127.0.0.1:30005"
-	nodes := getClusterNodes(ValkeyNode{
-		Address: address,
-	})
-	totalKeys := 1000
-	dbSizeKeys := 0
-	for _, n := range nodes {
-		nClient, err := valkey.NewClient(valkey.ClientOption{
-			InitAddress:       []string{n.Address},
-			ForceSingleClient: true,
-		})
-		g.Expect(err).To(BeNil())
-		ctx := context.Background()
-		dbsize, err := nClient.Do(ctx, nClient.B().Dbsize().Build()).AsInt64()
-		g.Expect(err).To(BeNil())
-		dbSizeKeys += int(dbsize)
-		nClient.Close()
+	initTestFlags(t)
 
+	totalKeys := 1000
+	var address string
+	var client valkey.Client
+	if !t.Run("setup env", func(t *testing.T) {
+		address = createValkeyInstance()
+		client = createClient(address)
+		generateTestData(client, totalKeys)
+	}) {
+		return
 	}
-	g.Expect(totalKeys).To(Equal(dbSizeKeys))
+	t.Run("test", func(t *testing.T) {
+		g := NewWithT(t)
+		nodes := getClusterNodes(ValkeyNode{
+			Address: address,
+		})
+		dbSizeKeys := 0
+		for _, n := range nodes {
+			nClient := createClient(n.Address)
+			ctx := context.Background()
+			dbsize, err := nClient.Do(ctx, nClient.B().Dbsize().Build()).AsInt64()
+			g.Expect(err).To(BeNil())
+			dbSizeKeys += int(dbsize)
+			nClient.Close()
+
+		}
+		g.Expect(totalKeys).To(Equal(dbSizeKeys))
+	})
+	t.Cleanup(func() {
+		cleanupValkeyInstance(address, client)
+	})
 }
 
 func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
-	g := NewWithT(t)
+	initTestFlags(t)
 
 	hashKeysCount := 1000
 	var address string
 	var client valkey.Client
-	t.Run("setup env", func(t *testing.T) {
+	if !t.Run("setup env", func(t *testing.T) {
+		g := NewWithT(t)
 		address = createValkeyInstance()
 		g.Eventually(address).To(BeAnExistingFile())
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
-	})
+	}) {
+		return
+	}
 
 	t.Run("test", func(t *testing.T) {
+		g := NewWithT(t)
 		td, _ := tdigest.New()
 		v := ValkeyNode{
 			Address: address,
 			metrics: ValkeyNodeMetrics{tdigest: td},
 		}
-		initFlags()
-		flag.Set("key-pattern", "item*")
-		flag.Set("print-output", "false")
-		flag.Parse()
-		v.getNodeConfig()
-		v.analyze()
+		setTestFlag(t, "key-pattern", "item*")
+		setTestFlag(t, "print-output", "false")
+		parseArguments()
+		g.Expect(v.getNodeConfig()).To(Succeed())
+		g.Expect(v.analyze()).To(Succeed())
 		g.Expect(v.metrics.hashObjCount).To(Equal(hashKeysCount))
-		client.Do(context.Background(), client.B().Shutdown().Force().Build())
 	})
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Shutdown().Build())
-		os.Remove(address)
-		client.Close()
+		cleanupValkeyInstance(address, client)
 	})
 }
 
 func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
-	g := NewWithT(t)
+	initTestFlags(t)
+
 	hashKeysCount := 1000
 	var address string
 	var client valkey.Client
-	var v ValkeyNode
-	t.Run("setup env", func(t *testing.T) {
+	if !t.Run("setup env", func(t *testing.T) {
+		g := NewWithT(t)
 		address = createValkeyInstance()
 		g.Eventually(address).To(BeAnExistingFile())
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
-	})
+	}) {
+		return
+	}
 	t.Run("test", func(t *testing.T) {
+		g := NewWithT(t)
 		td, _ := tdigest.New()
-		v = ValkeyNode{
+		v := ValkeyNode{
 			Address: address,
 			metrics: ValkeyNodeMetrics{tdigest: td},
 		}
-		initFlags()
-		flag.Set("print-output", "false")
-		flag.Set("key-pattern", "item-not-exists*")
-		flag.Parse()
+		setTestFlag(t, "print-output", "false")
+		setTestFlag(t, "key-pattern", "item-not-exists*")
+		parseArguments()
 		g.Expect((v.metrics.hashObjCount)).To(Equal(0))
 
-		v.analyze()
+		g.Expect(v.analyze()).To(Succeed())
 		g.Expect((v.metrics.hashObjCount)).To(Equal(0))
 	})
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Shutdown().Build())
-		os.Remove(address)
-		client.Close()
+		cleanupValkeyInstance(address, client)
 	})
 
 }
 
 func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
-	g := NewWithT(t)
+	initTestFlags(t)
+
 	hashKeysCount := 1000
 	var address string
 	var client valkey.Client
-	t.Run("setup env", func(t *testing.T) {
+	if !t.Run("setup env", func(t *testing.T) {
+		g := NewWithT(t)
 		address = createValkeyInstance()
 		g.Eventually(address).To(BeAnExistingFile())
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
-	})
+	}) {
+		return
+	}
 	t.Run("test", func(t *testing.T) {
+		g := NewWithT(t)
 		td, _ := tdigest.New()
 		v := ValkeyNode{
 			Address: address,
 			metrics: ValkeyNodeMetrics{tdigest: td},
 		}
-		initFlags()
-		flag.Set("field-pattern", "nam.+")
-		flag.Set("print-output", "false")
-		flag.Parse()
+		setTestFlag(t, "field-pattern", "nam.+")
+		setTestFlag(t, "print-output", "false")
 		parseArguments()
-		v.getNodeConfig()
-		v.analyze()
+		g.Expect(v.getNodeConfig()).To(Succeed())
+		g.Expect(v.analyze()).To(Succeed())
 		g.Expect(v.metrics.hashFieldCount).To(Equal(hashKeysCount))
 		g.Expect(v.metrics.maxField).To(ContainSubstring(".name"))
 	})
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Shutdown().Build())
-		os.Remove(address)
-		client.Close()
+		cleanupValkeyInstance(address, client)
 	})
 
 }
 
 func TestAnalyzeWithFieldNotMatchingFilter(t *testing.T) {
-	g := NewWithT(t)
+	initTestFlags(t)
+
 	hashKeysCount := 1000
 	var address string
 	var client valkey.Client
-	t.Run("setup env", func(t *testing.T) {
+	if !t.Run("setup env", func(t *testing.T) {
+		g := NewWithT(t)
 		address = createValkeyInstance()
 		g.Eventually(address).To(BeAnExistingFile())
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
-	})
+	}) {
+		return
+	}
 	t.Run("test", func(t *testing.T) {
+		g := NewWithT(t)
 		td, _ := tdigest.New()
 		v := ValkeyNode{
 			Address: address,
 			metrics: ValkeyNodeMetrics{tdigest: td},
 		}
-		initFlags()
-		flag.Set("field-pattern", "namo.+")
-		flag.Set("print-output", "false")
-		flag.Parse()
+		setTestFlag(t, "field-pattern", "namo.+")
+		setTestFlag(t, "print-output", "false")
 		parseArguments()
-		v.getNodeConfig()
-		v.analyze()
+		g.Expect(v.getNodeConfig()).To(Succeed())
+		g.Expect(v.analyze()).To(Succeed())
 		g.Expect(v.metrics.hashFieldCount).To(Equal(0))
 		g.Expect(v.metrics.maxField).To(BeEmpty())
 	})
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Shutdown().Build())
-		os.Remove(address)
-		client.Close()
+		cleanupValkeyInstance(address, client)
 	})
 
 }

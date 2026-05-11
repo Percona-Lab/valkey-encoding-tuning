@@ -24,6 +24,7 @@ var (
 	fieldPattern      *string
 	fieldPatternRE    *regexp.Regexp
 	printOutput       *bool
+	flagsInitialized  *flag.FlagSet
 )
 
 type ValkeyNodeMetrics struct {
@@ -42,6 +43,18 @@ type ValkeyNode struct {
 	maxListPackSize int
 }
 
+func (v *ValkeyNode) ensureMetrics() error {
+	if v.metrics.tdigest != nil {
+		return nil
+	}
+	t, err := tdigest.New()
+	if err != nil {
+		return err
+	}
+	v.metrics.tdigest = t
+	return nil
+}
+
 func (v *ValkeyNode) getNodeConfig() error {
 	ctx := context.Background()
 	client := createClient(v.Address)
@@ -58,6 +71,9 @@ func (v *ValkeyNode) getNodeConfig() error {
 }
 
 func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
+	if err := v.ensureMetrics(); err != nil {
+		return err
+	}
 	ctx := context.Background()
 	var cursor uint64
 	for {
@@ -145,6 +161,9 @@ func createClient(address string) valkey.Client {
 }
 
 func (v *ValkeyNode) analyze() error {
+	if err := v.ensureMetrics(); err != nil {
+		return err
+	}
 	ctx := context.Background()
 
 	client := createClient(v.Address)
@@ -249,32 +268,17 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	return cs
 }
 
-func registerStringFlag(name string, value string, usage string) *string {
-	var output string
-	if flag.Lookup(name) == nil {
-		flag.StringVar(&output, name, value, usage)
-	} else {
-		output = flag.Lookup(name).Value.(flag.Getter).Get().(string)
-	}
-	return &output
-}
-func registerBoolFlag(name string, value bool, usage string) *bool {
-	var output bool
-	if flag.Lookup(name) == nil {
-		flag.BoolVar(&output, name, value, usage)
-	} else {
-		output = flag.Lookup(name).Value.(flag.Getter).Get().(bool)
-	}
-	return &output
-
-}
 func initFlags() {
-	bootstrapAddress = registerStringFlag("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
-	bootstrapPassword = registerStringFlag("password", "", "Password of the Valkey user")
-	bootstrapUsername = registerStringFlag("username", "", "Name of the Valkey user")
-	keyPattern = registerStringFlag("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
-	fieldPattern = registerStringFlag("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
-	printOutput = registerBoolFlag("print-output", true, "Print output to stdout")
+	if flagsInitialized == flag.CommandLine {
+		return
+	}
+	bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
+	bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
+	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
+	keyPattern = flag.String("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
+	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
+	printOutput = flag.Bool("print-output", true, "Print output to stdout")
+	flagsInitialized = flag.CommandLine
 }
 func parseArguments() {
 	if *fieldPattern != "" {
@@ -285,8 +289,8 @@ func parseArguments() {
 }
 
 func main() {
-	flag.Parse()
 	initFlags()
+	flag.Parse()
 	parseArguments()
 	v := ValkeyNode{
 		Address: *bootstrapAddress,
