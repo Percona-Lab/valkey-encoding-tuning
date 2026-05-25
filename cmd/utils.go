@@ -9,8 +9,7 @@ import (
 
 func (v *ValkeyNode) getNodeConfig() error {
 	ctx := context.Background()
-	client := createClient(v.Address)
-	defer client.Close()
+	client := v.getClient()
 	config, err := client.Do(ctx,
 		client.B().ConfigGet().Parameter(listpackMaxConfig).Build(),
 	).AsStrMap()
@@ -26,8 +25,7 @@ func (v *ValkeyNode) getNodeConfig() error {
 
 func (v *ValkeyNode) getCommandStats() (map[string]int, error) {
 	ctx := context.Background()
-	client := createClient((v.Address))
-	defer client.Close()
+	client := v.getClient()
 	info, err := client.Do(ctx,
 		client.B().Arbitrary("INFO", "COMMANDSTATS").Build(),
 	).ToString()

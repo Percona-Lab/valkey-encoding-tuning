@@ -4,10 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/caio/go-tdigest/v5"
-	"github.com/valkey-io/valkey-go"
 	"regexp"
 	"strings"
+
+	"github.com/caio/go-tdigest/v5"
+	"github.com/valkey-io/valkey-go"
 )
 
 const (
@@ -37,9 +38,24 @@ type ValkeyNodeMetrics struct {
 }
 type ValkeyNode struct {
 	Address         string
+	Client          valkey.Client
 	Config          map[string]string
 	metrics         ValkeyNodeMetrics
 	maxListPackSize int
+}
+
+func (v *ValkeyNode) getClient() valkey.Client {
+	if v.Client == nil {
+		v.Client = createClient(v.Address)
+	}
+	return v.Client
+}
+
+func (v *ValkeyNode) Close() {
+	if v.Client != nil {
+		v.Client.Close()
+		v.Client = nil
+	}
 }
 
 func (v *ValkeyNode) ensureMetrics() error {
@@ -51,51 +67,6 @@ func (v *ValkeyNode) ensureMetrics() error {
 		return err
 	}
 	v.metrics.tdigest = t
-	return nil
-}
-
-func (v *ValkeyNode) analyzeHashField(client valkey.Client, hash string) error {
-	if err := v.ensureMetrics(); err != nil {
-		return err
-	}
-	ctx := context.Background()
-	var cursor uint64
-	for {
-		resp := client.Do(
-			ctx,
-			client.B().Hscan().Key(hash).Cursor(cursor).Build(),
-		)
-		entry, err := resp.AsScanEntry()
-		if err != nil {
-			return err
-		}
-		fCount := 0
-		fTotalSize := 0
-		for i := 0; i < len(entry.Elements); i += 2 {
-			if fieldPatternRE != nil && !fieldPatternRE.MatchString(entry.Elements[i]) {
-				continue
-			}
-			fCount++
-			fSize := len(entry.Elements[i+1])
-			v.metrics.tdigest.Add(float64(fSize))
-			fTotalSize += fSize
-			if fSize >= v.maxListPackSize {
-				v.metrics.hashTableObjCount++
-			}
-			if fSize > v.metrics.maxFieldSize {
-				v.metrics.maxFieldSize = fSize
-				v.metrics.maxField = fmt.Sprintf("%s.%s", hash, entry.Elements[i])
-			}
-		}
-		if fCount > 0 {
-			v.metrics.avgFieldSize = float64((fTotalSize + int(float64(v.metrics.hashFieldCount)*v.metrics.avgFieldSize)) / (v.metrics.hashFieldCount + fCount))
-			v.metrics.hashFieldCount += fCount
-		}
-		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
-	}
 	return nil
 }
 
@@ -142,50 +113,6 @@ func createClient(address string) valkey.Client {
 		panic(err)
 	}
 	return client
-}
-
-func (v *ValkeyNode) analyze() error {
-	if err := v.ensureMetrics(); err != nil {
-		return err
-	}
-	ctx := context.Background()
-
-	client := createClient(v.Address)
-	defer client.Close()
-	err := client.Do(ctx, client.B().Readonly().Build()).Error()
-	if err != nil {
-		panic(err)
-	}
-	var cursor uint64
-	for {
-		scanCmd := client.B().Scan().Cursor(cursor)
-		if *keyPattern != "" {
-			scanCmd.Match(*keyPattern)
-		}
-		scanCmd.Type("hash")
-		resp := client.Do(
-			ctx,
-			scanCmd.Build(),
-		)
-		entry, err := resp.AsScanEntry()
-		if err != nil {
-			return err
-		}
-		v.metrics.hashObjCount += len(entry.Elements)
-		for _, key := range entry.Elements {
-			err = v.analyzeHashField(client, key)
-			if err != nil {
-				panic(err)
-			}
-		}
-		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
-	}
-	v.printNodeAnalysis()
-	return nil
-
 }
 
 func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
@@ -235,7 +162,7 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	}
 	for _, v := range nodes {
 		v.getNodeConfig()
-		v.analyze()
+		v.analyzeHash()
 		runningTotalField := (cs.metrics.hashFieldCount + v.metrics.hashFieldCount)
 		runningTotalFieldSize := (float64(cs.metrics.hashFieldCount*int(cs.metrics.avgFieldSize)) + float64(v.metrics.hashFieldCount*int(v.metrics.avgFieldSize)))
 		cs.metrics.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))

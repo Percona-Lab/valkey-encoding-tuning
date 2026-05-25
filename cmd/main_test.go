@@ -162,7 +162,7 @@ func TestAnalyzeNode(t *testing.T) {
 		parseArguments()
 
 		g.Expect(v.getNodeConfig()).To(Succeed())
-		g.Expect(v.analyze()).To(Succeed())
+		g.Expect(v.analyzeHash()).To(Succeed())
 		g.Expect(v.metrics.hashObjCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
@@ -262,7 +262,7 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
-		g.Expect(v.analyze()).To(Succeed())
+		g.Expect(v.analyzeHash()).To(Succeed())
 		g.Expect(v.metrics.hashObjCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
@@ -297,7 +297,7 @@ func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
 		parseArguments()
 		g.Expect((v.metrics.hashObjCount)).To(Equal(0))
 
-		g.Expect(v.analyze()).To(Succeed())
+		g.Expect(v.analyzeHash()).To(Succeed())
 		g.Expect((v.metrics.hashObjCount)).To(Equal(0))
 	})
 	t.Cleanup(func() {
@@ -332,7 +332,7 @@ func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
-		g.Expect(v.analyze()).To(Succeed())
+		g.Expect(v.analyzeHash()).To(Succeed())
 		g.Expect(v.metrics.hashFieldCount).To(Equal(hashKeysCount))
 		g.Expect(v.metrics.maxField).To(ContainSubstring(".name"))
 	})
@@ -368,7 +368,7 @@ func TestAnalyzeWithFieldNotMatchingFilter(t *testing.T) {
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
-		g.Expect(v.analyze()).To(Succeed())
+		g.Expect(v.analyzeHash()).To(Succeed())
 		g.Expect(v.metrics.hashFieldCount).To(Equal(0))
 		g.Expect(v.metrics.maxField).To(BeEmpty())
 	})
