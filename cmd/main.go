@@ -7,7 +7,6 @@ import (
 	"github.com/caio/go-tdigest/v5"
 	"github.com/valkey-io/valkey-go"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -52,21 +51,6 @@ func (v *ValkeyNode) ensureMetrics() error {
 		return err
 	}
 	v.metrics.tdigest = t
-	return nil
-}
-
-func (v *ValkeyNode) getNodeConfig() error {
-	ctx := context.Background()
-	client := createClient(v.Address)
-	defer client.Close()
-	config, err := client.Do(ctx, client.B().ConfigGet().Parameter(listpackMaxConfig).Build()).AsStrMap()
-	if err != nil {
-		return err
-	}
-	v.maxListPackSize, err = strconv.Atoi(config[listpackMaxConfig])
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
