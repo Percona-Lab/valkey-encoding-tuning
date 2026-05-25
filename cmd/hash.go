@@ -3,6 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
+)
+
+const (
+	hashMaxListpack = "hash-max-listpack-value"
 )
 
 func (v *ValkeyNode) analyzeHash() error {
@@ -19,8 +24,8 @@ func (v *ValkeyNode) analyzeHash() error {
 	var cursor uint64
 	for {
 		scanCmd := client.B().Scan().Cursor(cursor)
-		if *keyPattern != "" {
-			scanCmd.Match(*keyPattern)
+		if *hashKeyPattern != "" {
+			scanCmd.Match(*hashKeyPattern)
 		}
 		scanCmd.Type("hash")
 		resp := client.Do(
@@ -55,6 +60,10 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 	ctx := context.Background()
 	client := v.getClient()
 	var cursor uint64
+	maxLpSize, err := strconv.Atoi(v.Config[hashMaxListpack])
+	if err != nil {
+		return err
+	}
 	for {
 		resp := client.Do(
 			ctx,
@@ -74,7 +83,7 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			fSize := len(entry.Elements[i+1])
 			v.metrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
-			if fSize >= v.maxListPackSize {
+			if fSize >= maxLpSize {
 				v.metrics.hashTableObjCount++
 			}
 			if fSize > v.metrics.maxFieldSize {

@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	listpackMaxConfig = "hash-max-listpack-value"
 	errNotClusterMode = "This instance has cluster support disabled"
 )
 
@@ -20,7 +19,8 @@ var (
 	bootstrapAddress  *string
 	bootstrapUsername *string
 	bootstrapPassword *string
-	keyPattern        *string
+	hashKeyPattern    *string
+	listKeyPattern    *string
 	fieldPattern      *string
 	fieldPatternRE    *regexp.Regexp
 	printOutput       *bool
@@ -37,11 +37,10 @@ type ValkeyNodeMetrics struct {
 	maxFieldSize      int
 }
 type ValkeyNode struct {
-	Address         string
-	Client          valkey.Client
-	Config          map[string]string
-	metrics         ValkeyNodeMetrics
-	maxListPackSize int
+	Address string
+	Client  valkey.Client
+	Config  map[string]string
+	metrics ValkeyNodeMetrics
 }
 
 func (v *ValkeyNode) getClient() valkey.Client {
@@ -75,7 +74,7 @@ func (v *ValkeyNode) printNodeAnalysis() {
 		return
 	}
 	fmt.Println("-------------------")
-	fmt.Printf("Analysis for node %s (%s=%d):\n", v.Address, listpackMaxConfig, v.maxListPackSize)
+	fmt.Printf("Analysis for node %s (%s=%s):\n", v.Address, hashMaxListpack, v.Config[hashMaxListpack])
 	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.metrics.hashTableObjCount, v.metrics.hashObjCount, (float64(v.metrics.hashTableObjCount) / float64(v.metrics.hashObjCount) * 100))
 	fmt.Printf("- hash fields count: %d\n", v.metrics.hashFieldCount)
 	fmt.Printf("- largest hash field: %s, size:%d \n", v.metrics.maxField, v.metrics.maxFieldSize)
@@ -186,7 +185,7 @@ func initFlags() {
 	bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
 	bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
 	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
-	keyPattern = flag.String("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
+	hashKeyPattern = flag.String("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
 	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
 	printOutput = flag.Bool("print-output", true, "Print output to stdout")
 	flagsInitialized = flag.CommandLine

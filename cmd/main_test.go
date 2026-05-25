@@ -31,7 +31,7 @@ func initTestFlags(t *testing.T) {
 	oldBootstrapAddress := bootstrapAddress
 	oldBootstrapUsername := bootstrapUsername
 	oldBootstrapPassword := bootstrapPassword
-	oldKeyPattern := keyPattern
+	oldKeyPattern := hashKeyPattern
 	oldFieldPattern := fieldPattern
 	oldFieldPatternRE := fieldPatternRE
 	oldPrintOutput := printOutput
@@ -48,7 +48,7 @@ func initTestFlags(t *testing.T) {
 		bootstrapAddress = oldBootstrapAddress
 		bootstrapUsername = oldBootstrapUsername
 		bootstrapPassword = oldBootstrapPassword
-		keyPattern = oldKeyPattern
+		hashKeyPattern = oldKeyPattern
 		fieldPattern = oldFieldPattern
 		fieldPatternRE = oldFieldPatternRE
 		printOutput = oldPrintOutput

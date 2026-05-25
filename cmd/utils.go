@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"maps"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,15 +12,13 @@ func (v *ValkeyNode) getNodeConfig() error {
 	ctx := context.Background()
 	client := v.getClient()
 	config, err := client.Do(ctx,
-		client.B().ConfigGet().Parameter(listpackMaxConfig).Build(),
+		client.B().ConfigGet().Parameter(hashMaxListpack).Build(),
 	).AsStrMap()
 	if err != nil {
 		return err
 	}
-	v.maxListPackSize, err = strconv.Atoi(config[listpackMaxConfig])
-	if err != nil {
-		return err
-	}
+	v.Config = make(map[string]string)
+	maps.Copy(v.Config, config)
 	return nil
 }
 
