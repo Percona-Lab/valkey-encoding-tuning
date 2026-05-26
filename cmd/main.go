@@ -30,6 +30,7 @@ type ValkeyNode struct {
 	Client      valkey.Client
 	Config      map[string]string
 	HashMetrics HashMetrics
+	ListMetrics ListMetrics
 }
 
 func (v *ValkeyNode) getClient() valkey.Client {
@@ -74,6 +75,7 @@ func makeValkeyNode(address string) ValkeyNode {
 	return ValkeyNode{
 		Address:     address,
 		HashMetrics: makeHashMetrics(),
+		ListMetrics: makeListMetrics(),
 	}
 }
 

@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/caio/go-tdigest/v5"
 	"strconv"
+
+	"github.com/caio/go-tdigest/v5"
 )
 
 const (
@@ -12,13 +13,13 @@ const (
 )
 
 type HashMetrics struct {
-	tdigest           *tdigest.TDigest
-	hashObjCount      int
-	hashFieldCount    int
-	hashTableObjCount uint64
-	maxField          string
-	avgFieldSize      float64
-	maxFieldSize      int
+	tdigest        *tdigest.TDigest
+	objCount       int
+	fieldCount     int
+	hashTableCount uint64
+	maxField       string
+	avgFieldSize   float64
+	maxFieldSize   int
 }
 
 func makeHashMetrics() HashMetrics {
@@ -52,7 +53,7 @@ func (v *ValkeyNode) analyzeHash() error {
 		if err != nil {
 			return err
 		}
-		v.HashMetrics.hashObjCount += len(entry.Elements)
+		v.HashMetrics.objCount += len(entry.Elements)
 		for _, key := range entry.Elements {
 			err = v.analyzeHashField(key)
 			if err != nil {
@@ -97,7 +98,7 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			v.HashMetrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
 			if fSize >= maxLpSize {
-				v.HashMetrics.hashTableObjCount++
+				v.HashMetrics.hashTableCount++
 			}
 			if fSize > v.HashMetrics.maxFieldSize {
 				v.HashMetrics.maxFieldSize = fSize
@@ -105,8 +106,8 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			}
 		}
 		if fCount > 0 {
-			v.HashMetrics.avgFieldSize = float64((fTotalSize + int(float64(v.HashMetrics.hashFieldCount)*v.HashMetrics.avgFieldSize)) / (v.HashMetrics.hashFieldCount + fCount))
-			v.HashMetrics.hashFieldCount += fCount
+			v.HashMetrics.avgFieldSize = float64((fTotalSize + int(float64(v.HashMetrics.fieldCount)*v.HashMetrics.avgFieldSize)) / (v.HashMetrics.fieldCount + fCount))
+			v.HashMetrics.fieldCount += fCount
 		}
 		cursor = entry.Cursor
 		if cursor == 0 {
@@ -122,8 +123,8 @@ func (v *ValkeyNode) printHashDatatypeAnalysis() {
 	}
 	fmt.Println("-------------------")
 	fmt.Printf("Analysis for node %s (%s=%s):\n", v.Address, hashMaxListpack, v.Config[hashMaxListpack])
-	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.HashMetrics.hashTableObjCount, v.HashMetrics.hashObjCount, (float64(v.HashMetrics.hashTableObjCount) / float64(v.HashMetrics.hashObjCount) * 100))
-	fmt.Printf("- hash fields count: %d\n", v.HashMetrics.hashFieldCount)
+	fmt.Printf("- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.HashMetrics.hashTableCount, v.HashMetrics.objCount, (float64(v.HashMetrics.hashTableCount) / float64(v.HashMetrics.objCount) * 100))
+	fmt.Printf("- hash fields count: %d\n", v.HashMetrics.fieldCount)
 	fmt.Printf("- largest hash field: %s, size:%d \n", v.HashMetrics.maxField, v.HashMetrics.maxFieldSize)
 	fmt.Printf("- avg field size: %.2f\n", v.HashMetrics.avgFieldSize)
 	fmt.Printf(`- hash fields' size distribution:
@@ -138,15 +139,15 @@ func (v *ValkeyNode) printHashDatatypeAnalysis() {
 }
 
 func (v *ValkeyNode) updateHashStatistics(node *ValkeyNode) {
-	runningTotalField := (v.HashMetrics.hashFieldCount + node.HashMetrics.hashFieldCount)
-	runningTotalFieldSize := (float64(v.HashMetrics.hashFieldCount*int(v.HashMetrics.avgFieldSize)) + float64(node.HashMetrics.hashFieldCount*int(node.HashMetrics.avgFieldSize)))
+	runningTotalField := (v.HashMetrics.fieldCount + node.HashMetrics.fieldCount)
+	runningTotalFieldSize := (float64(v.HashMetrics.fieldCount*int(v.HashMetrics.avgFieldSize)) + float64(node.HashMetrics.fieldCount*int(node.HashMetrics.avgFieldSize)))
 	v.HashMetrics.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	v.HashMetrics.hashFieldCount = runningTotalField
+	v.HashMetrics.fieldCount = runningTotalField
 	if node.HashMetrics.maxFieldSize > v.HashMetrics.maxFieldSize {
 		v.HashMetrics.maxFieldSize = node.HashMetrics.maxFieldSize
 		v.HashMetrics.maxField = node.HashMetrics.maxField
 	}
-	v.HashMetrics.hashTableObjCount += node.HashMetrics.hashTableObjCount
-	v.HashMetrics.hashObjCount += node.HashMetrics.hashObjCount
+	v.HashMetrics.hashTableCount += node.HashMetrics.hashTableCount
+	v.HashMetrics.objCount += node.HashMetrics.objCount
 	v.HashMetrics.tdigest.Merge(node.HashMetrics.tdigest)
 }

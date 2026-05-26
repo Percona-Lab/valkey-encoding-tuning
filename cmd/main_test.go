@@ -158,7 +158,7 @@ func TestAnalyzeNode(t *testing.T) {
 
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.HashMetrics.hashObjCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.objCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -184,7 +184,7 @@ func TestAnalyzeCluster(t *testing.T) {
 		parseArguments()
 
 		cs := analyzeCluster(makeValkeyNode(address))
-		g.Expect(cs.HashMetrics.hashObjCount).To(Equal(hashKeysCount))
+		g.Expect(cs.HashMetrics.objCount).To(Equal(hashKeysCount))
 
 	})
 	t.Cleanup(func() {
@@ -252,7 +252,7 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.HashMetrics.hashObjCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.objCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -280,10 +280,10 @@ func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
 		setTestFlag(t, "print-output", "false")
 		setTestFlag(t, "key-pattern", "item-not-exists*")
 		parseArguments()
-		g.Expect((v.HashMetrics.hashObjCount)).To(Equal(0))
+		g.Expect((v.HashMetrics.objCount)).To(Equal(0))
 
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect((v.HashMetrics.hashObjCount)).To(Equal(0))
+		g.Expect((v.HashMetrics.objCount)).To(Equal(0))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -314,7 +314,7 @@ func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.HashMetrics.hashFieldCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.fieldCount).To(Equal(hashKeysCount))
 		g.Expect(v.HashMetrics.maxField).To(ContainSubstring(".name"))
 	})
 	t.Cleanup(func() {
@@ -346,7 +346,7 @@ func TestAnalyzeWithFieldNotMatchingFilter(t *testing.T) {
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.HashMetrics.hashFieldCount).To(Equal(0))
+		g.Expect(v.HashMetrics.fieldCount).To(Equal(0))
 		g.Expect(v.HashMetrics.maxField).To(BeEmpty())
 	})
 	t.Cleanup(func() {
