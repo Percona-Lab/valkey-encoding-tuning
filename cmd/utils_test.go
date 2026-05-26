@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/caio/go-tdigest/v5"
 	. "github.com/onsi/gomega"
 	"github.com/valkey-io/valkey-go"
 )
@@ -22,11 +21,7 @@ func TestGetServerInfo(t *testing.T) {
 	}) {
 		return
 	}
-	td, _ := tdigest.New()
-	v := ValkeyNode{
-		Address: address,
-		metrics: ValkeyNodeMetrics{tdigest: td},
-	}
+	v := makeValkeyNode(address)
 	t.Run("test get commandstats", func(t *testing.T) {
 		g := NewWithT(t)
 		cmdstats, err := v.getCommandStats()

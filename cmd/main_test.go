@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/caio/go-tdigest/v5"
 	"github.com/go-faker/faker/v4"
 	. "github.com/onsi/gomega"
 	"github.com/valkey-io/valkey-go"
@@ -153,17 +152,13 @@ func TestAnalyzeNode(t *testing.T) {
 
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		td, _ := tdigest.New()
-		v := ValkeyNode{
-			Address: address,
-			metrics: ValkeyNodeMetrics{tdigest: td},
-		}
+		v := makeValkeyNode(address)
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.metrics.hashObjCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.hashObjCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -188,10 +183,8 @@ func TestAnalyzeCluster(t *testing.T) {
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 
-		cs := analyzeCluster(ValkeyNode{
-			Address: address,
-		})
-		g.Expect(cs.metrics.hashObjCount).To(Equal(hashKeysCount))
+		cs := analyzeCluster(makeValkeyNode(address))
+		g.Expect(cs.HashMetrics.hashObjCount).To(Equal(hashKeysCount))
 
 	})
 	t.Cleanup(func() {
@@ -253,17 +246,13 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		td, _ := tdigest.New()
-		v := ValkeyNode{
-			Address: address,
-			metrics: ValkeyNodeMetrics{tdigest: td},
-		}
+		v := makeValkeyNode(address)
 		setTestFlag(t, "key-pattern", "item*")
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.metrics.hashObjCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.hashObjCount).To(Equal(hashKeysCount))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -287,18 +276,14 @@ func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		td, _ := tdigest.New()
-		v := ValkeyNode{
-			Address: address,
-			metrics: ValkeyNodeMetrics{tdigest: td},
-		}
+		v := makeValkeyNode(address)
 		setTestFlag(t, "print-output", "false")
 		setTestFlag(t, "key-pattern", "item-not-exists*")
 		parseArguments()
-		g.Expect((v.metrics.hashObjCount)).To(Equal(0))
+		g.Expect((v.HashMetrics.hashObjCount)).To(Equal(0))
 
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect((v.metrics.hashObjCount)).To(Equal(0))
+		g.Expect((v.HashMetrics.hashObjCount)).To(Equal(0))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -323,18 +308,14 @@ func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		td, _ := tdigest.New()
-		v := ValkeyNode{
-			Address: address,
-			metrics: ValkeyNodeMetrics{tdigest: td},
-		}
+		v := makeValkeyNode(address)
 		setTestFlag(t, "field-pattern", "nam.+")
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.metrics.hashFieldCount).To(Equal(hashKeysCount))
-		g.Expect(v.metrics.maxField).To(ContainSubstring(".name"))
+		g.Expect(v.HashMetrics.hashFieldCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.maxField).To(ContainSubstring(".name"))
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
@@ -359,18 +340,14 @@ func TestAnalyzeWithFieldNotMatchingFilter(t *testing.T) {
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		td, _ := tdigest.New()
-		v := ValkeyNode{
-			Address: address,
-			metrics: ValkeyNodeMetrics{tdigest: td},
-		}
+		v := makeValkeyNode(address)
 		setTestFlag(t, "field-pattern", "namo.+")
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.metrics.hashFieldCount).To(Equal(0))
-		g.Expect(v.metrics.maxField).To(BeEmpty())
+		g.Expect(v.HashMetrics.hashFieldCount).To(Equal(0))
+		g.Expect(v.HashMetrics.maxField).To(BeEmpty())
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
