@@ -31,6 +31,7 @@ func initTestFlags(t *testing.T) {
 	oldBootstrapUsername := bootstrapUsername
 	oldBootstrapPassword := bootstrapPassword
 	oldKeyPattern := hashKeyPattern
+	oldListKeyPattern := listKeyPattern
 	oldFieldPattern := fieldPattern
 	oldFieldPatternRE := fieldPatternRE
 	oldPrintOutput := printOutput
@@ -48,6 +49,7 @@ func initTestFlags(t *testing.T) {
 		bootstrapUsername = oldBootstrapUsername
 		bootstrapPassword = oldBootstrapPassword
 		hashKeyPattern = oldKeyPattern
+		listKeyPattern = oldListKeyPattern
 		fieldPattern = oldFieldPattern
 		fieldPatternRE = oldFieldPatternRE
 		printOutput = oldPrintOutput
@@ -247,7 +249,7 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
 		v := makeValkeyNode(address)
-		setTestFlag(t, "key-pattern", "item*")
+		setTestFlag(t, "hash-key-pattern", "item*")
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
@@ -278,7 +280,7 @@ func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
 		g := NewWithT(t)
 		v := makeValkeyNode(address)
 		setTestFlag(t, "print-output", "false")
-		setTestFlag(t, "key-pattern", "item-not-exists*")
+		setTestFlag(t, "hash-key-pattern", "item-not-exists*")
 		parseArguments()
 		g.Expect((v.HashMetrics.objCount)).To(Equal(0))
 

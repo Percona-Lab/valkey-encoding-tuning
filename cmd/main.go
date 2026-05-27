@@ -126,7 +126,8 @@ func initFlags() {
 	bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
 	bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
 	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
-	hashKeyPattern = flag.String("key-pattern", "", "Pattern (glob style) of the keys to be analyzed")
+	hashKeyPattern = flag.String("hash-key-pattern", "", "Pattern (glob style) of the hash keys to be analyzed")
+	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the list keys to be analyzed")
 	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
 	printOutput = flag.Bool("print-output", true, "Print output to stdout")
 	flagsInitialized = flag.CommandLine

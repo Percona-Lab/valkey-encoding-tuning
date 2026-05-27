@@ -126,6 +126,9 @@ func (v *ValkeyNode) analyzeListKey(key string) error {
 		nodeCount = count / int64(maxNodeSize)
 		v.ListMetrics.tdigest.Add(float64(count))
 	}
+	if count > 0 && nodeCount < 1 {
+		nodeCount = 1
+	}
 
 	if v.ListMetrics.maxNodeCount < nodeCount {
 		v.ListMetrics.maxNodeCount = nodeCount
