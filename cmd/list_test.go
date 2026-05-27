@@ -205,8 +205,8 @@ func TestAnalyzeListKeyCalculatesMultipleNodesByElementCount(t *testing.T) {
 
 	g.Expect(v.analyzeListKey("list:1")).To(Succeed())
 
-	g.Expect(v.ListMetrics.maxNodeCount).To(Equal(int64(2)))
-	g.Expect(v.ListMetrics.avgNodeCount).To(Equal(int64(2)))
+	g.Expect(v.ListMetrics.maxNodeCount).To(Equal(int64(3)))
+	g.Expect(v.ListMetrics.avgNodeCount).To(Equal(int64(3)))
 }
 
 func TestAnalyzeListKeyCalculatesMultipleNodesByObjectSize(t *testing.T) {

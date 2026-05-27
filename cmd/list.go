@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,7 @@ func makeListMetrics() ListMetrics {
 	}
 	return ListMetrics{tdigest: t}
 }
+
 func (v *ValkeyNode) analyzeList() error {
 	ctx := context.Background()
 	client := v.getClient()
@@ -51,7 +53,7 @@ func (v *ValkeyNode) analyzeList() error {
 		client.B().Readonly().Build(),
 	).Error()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	var cursor uint64
 	for {
@@ -86,7 +88,9 @@ func (v *ValkeyNode) analyzeList() error {
 }
 
 func (v *ValkeyNode) analyzeListKey(key string) error {
+	oldCount := v.ListMetrics.objCount
 	v.ListMetrics.objCount++
+
 	ctx := context.Background()
 	client := v.getClient()
 	// count the number of elements
@@ -111,41 +115,54 @@ func (v *ValkeyNode) analyzeListKey(key string) error {
 		return err
 	}
 
-	var nodeCount int64
-	// List datatype create new node depending on the number of element per node, or node size
+	nodeCount, err := estimateListNodeCount(v.Config[listMaxListpackSize], count, ksize)
+	if err != nil {
+		return err
+	}
 	isMaxSizeByElementSize := strings.HasPrefix(v.Config[listMaxListpackSize], "-")
 	if isMaxSizeByElementSize {
-		maxNodeSize := optimizationLevel[v.Config[listMaxListpackSize]]
-		nodeCount = ksize / int64(maxNodeSize)
 		v.ListMetrics.tdigest.Add(float64(ksize))
 	} else {
-		maxNodeSize, err := strconv.Atoi(v.Config[listMaxListpackSize])
-		if err != nil {
-			return err
-		}
-		nodeCount = count / int64(maxNodeSize)
 		v.ListMetrics.tdigest.Add(float64(count))
 	}
-	if count > 0 && nodeCount < 1 {
-		nodeCount = 1
-	}
-
 	if v.ListMetrics.maxNodeCount < nodeCount {
 		v.ListMetrics.maxNodeCount = nodeCount
 	}
-	v.ListMetrics.avgNodeCount = (nodeCount + int64(v.ListMetrics.avgNodeCount)) / v.ListMetrics.objCount
+	v.ListMetrics.avgNodeCount = (nodeCount + (v.ListMetrics.avgNodeCount * oldCount)) / v.ListMetrics.objCount
 
 	if v.ListMetrics.maxObjSize < ksize {
 		v.ListMetrics.maxObjSize = ksize
 	}
-	v.ListMetrics.avgObjSize = (ksize + v.ListMetrics.avgObjSize) / v.ListMetrics.objCount
+	v.ListMetrics.avgObjSize = (ksize + v.ListMetrics.avgObjSize*oldCount) / v.ListMetrics.objCount
 
 	if v.ListMetrics.maxElementCount < count {
 		v.ListMetrics.maxElementCount = count
 	}
-	v.ListMetrics.avgElementCount = (count + v.ListMetrics.avgElementCount) / v.ListMetrics.objCount
+	v.ListMetrics.avgElementCount = (count + v.ListMetrics.avgElementCount*oldCount) / v.ListMetrics.objCount
 
 	return nil
+}
+
+func estimateListNodeCount(configValue string, elementCount, objectSize int64) (int64, error) {
+	var nodeCount int64
+	var elementSum int64
+	var maxNodeSize int
+	var err error
+	// List datatype create new node depending on the number of element per node, or node size
+	isMaxSizeByElementSize := strings.HasPrefix(configValue, "-")
+	if isMaxSizeByElementSize {
+		maxNodeSize = optimizationLevel[configValue]
+		elementSum = objectSize
+	} else {
+		maxNodeSize, err = strconv.Atoi(configValue)
+		if err != nil {
+			return -1, err
+		}
+		elementSum = elementCount
+	}
+	nodeCount = int64(math.Ceil(float64(elementSum) / float64(maxNodeSize)))
+
+	return nodeCount, nil
 }
 
 func (v *ValkeyNode) printListDatatypeAnalysis() {
@@ -171,8 +188,8 @@ func (v *ValkeyNode) printListDatatypeAnalysis() {
 + Quartile 2 (P50): %.2f
 + Quartile 3 (P75): %.2f
 + Quartile 4 (P99): %.2f
-`, v.HashMetrics.tdigest.Quantile(.25),
-		v.HashMetrics.tdigest.Quantile(0.5),
-		v.HashMetrics.tdigest.Quantile(0.75),
-		v.HashMetrics.tdigest.Quantile(0.99))
+`, v.ListMetrics.tdigest.Quantile(.25),
+		v.ListMetrics.tdigest.Quantile(0.5),
+		v.ListMetrics.tdigest.Quantile(0.75),
+		v.ListMetrics.tdigest.Quantile(0.99))
 }

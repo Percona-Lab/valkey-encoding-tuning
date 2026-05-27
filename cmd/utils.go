@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"regexp"
 	"strconv"
@@ -65,4 +66,20 @@ func (v *ValkeyNode) getUptime() (int, error) {
 		}
 	}
 	return -1, nil
+}
+
+func (v *ValkeyNode) printCommandStats() error {
+	uptime, err := v.getUptime()
+	if err != nil {
+		return err
+	}
+	cmdstats, err := v.getCommandStats()
+	if err != nil {
+		return err
+	}
+
+	for key, value := range cmdstats {
+		fmt.Printf("'%s' total execution: %d, op/s:%d\n", key, value, value/uptime)
+	}
+	return nil
 }
