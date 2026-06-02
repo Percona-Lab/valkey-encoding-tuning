@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -109,13 +110,35 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 }
 func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	nodes := getClusterNodes(bootstrapNode)
+	isCluster := len(nodes) > 1
+	hashAnalysis := make([]string, 0)
+	listAnalysis := make([]string, 0)
+
 	cs := makeValkeyNode("")
 	for _, v := range nodes {
 		v.getNodeConfig()
 		v.analyzeHash()
+		hashAnalysis = append(hashAnalysis, v.getHashDatatypeAnalysis())
 		cs.updateHashStatistics(&v)
+
+		v.analyzeList()
+		listAnalysis = append(listAnalysis, v.getListDatatypeAnalysis())
 	}
-	cs.printHashDatatypeAnalysis()
+	if *printOutput {
+		fmt.Println("# Hash Datatype Analysis")
+		for _, l := range hashAnalysis {
+			fmt.Println(l)
+		}
+		if isCluster {
+			fmt.Println(cs.getHashDatatypeAnalysis())
+		}
+
+		fmt.Println("# List Datatype Analysis")
+		for _, l := range listAnalysis {
+			fmt.Println(l)
+		}
+	}
+
 	return cs
 }
 

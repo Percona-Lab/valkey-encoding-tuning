@@ -13,7 +13,7 @@ func (v *ValkeyNode) getNodeConfig() error {
 	ctx := context.Background()
 	client := v.getClient()
 	config, err := client.Do(ctx,
-		client.B().ConfigGet().Parameter(hashMaxListpack).Build(),
+		client.B().ConfigGet().Parameter("*").Build(),
 	).AsStrMap()
 	if err != nil {
 		return err

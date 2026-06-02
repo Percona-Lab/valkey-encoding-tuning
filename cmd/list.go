@@ -84,6 +84,7 @@ func (v *ValkeyNode) analyzeList() error {
 		}
 
 	}
+
 	return nil
 }
 
@@ -114,7 +115,6 @@ func (v *ValkeyNode) analyzeListKey(key string) error {
 	if err != nil {
 		return err
 	}
-
 	nodeCount, err := estimateListNodeCount(v.Config[listMaxListpackSize], count, ksize)
 	if err != nil {
 		return err
@@ -165,26 +165,29 @@ func estimateListNodeCount(configValue string, elementCount, objectSize int64) (
 	return nodeCount, nil
 }
 
-func (v *ValkeyNode) printListDatatypeAnalysis() {
-	if !*printOutput {
-		return
-	}
+func (v *ValkeyNode) getListDatatypeAnalysis() string {
+	var sb strings.Builder
 	var sizeDistrType string
 	if strings.HasPrefix(v.Config[listMaxListpackSize], "-") {
 		sizeDistrType = "element size"
 	} else {
 		sizeDistrType = "element count"
 	}
-	fmt.Println("-------------------")
-	fmt.Printf("Analysis for node %s (%s=%s):\n", v.Address, listMaxListpackSize, v.Config[listMaxListpackSize])
-	fmt.Printf("- list keys found: %d \n", v.ListMetrics.objCount)
-	fmt.Printf("- largest node count:%d \n", v.ListMetrics.maxNodeCount)
-	fmt.Printf("- avg node count: %d\n", v.ListMetrics.avgNodeCount)
-	fmt.Printf("- largest element count:%d \n", v.ListMetrics.maxElementCount)
-	fmt.Printf("- avg element count: %d\n", v.ListMetrics.avgElementCount)
-	fmt.Printf("- List size distribution (by %s):\n", sizeDistrType)
-	fmt.Printf(`
-+ Quartile 1 (P25): %.2f
+	fmt.Fprintf(&sb, "## Node %s\n", v.Address)
+	fmt.Fprintf(&sb, "### Config\n")
+	fmt.Fprintf(&sb, "- %s=%s\n", listMaxListpackSize, v.Config[listMaxListpackSize])
+	fmt.Fprintf(&sb, "- %s=%s\n", listCompressDepth, v.Config[listCompressDepth])
+	fmt.Fprintf(&sb, "### Analysis\n")
+	if v.ListMetrics.objCount == 0 {
+		fmt.Fprintln(&sb, "N/A (no keys found)")
+	}
+	fmt.Fprintf(&sb, "- list keys found: %d \n", v.ListMetrics.objCount)
+	fmt.Fprintf(&sb, "- estimate largest node count:%d \n", v.ListMetrics.maxNodeCount)
+	fmt.Fprintf(&sb, "- estimate avg node count: %d\n", v.ListMetrics.avgNodeCount)
+	fmt.Fprintf(&sb, "- max element count:%d \n", v.ListMetrics.maxElementCount)
+	fmt.Fprintf(&sb, "- avg element count: %d\n", v.ListMetrics.avgElementCount)
+	fmt.Fprintf(&sb, "- List size distribution (by %s):\n", sizeDistrType)
+	fmt.Fprintf(&sb, `+ Quartile 1 (P25): %.2f
 + Quartile 2 (P50): %.2f
 + Quartile 3 (P75): %.2f
 + Quartile 4 (P99): %.2f
@@ -192,4 +195,5 @@ func (v *ValkeyNode) printListDatatypeAnalysis() {
 		v.ListMetrics.tdigest.Quantile(0.5),
 		v.ListMetrics.tdigest.Quantile(0.75),
 		v.ListMetrics.tdigest.Quantile(0.99))
+	return sb.String()
 }
