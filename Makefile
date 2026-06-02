@@ -1,8 +1,16 @@
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
+	GOBIN=$(shell go env GOPATH)/bin
 else
-GOBIN=$(shell go env GOBIN)
+	GOBIN=$(shell go env GOBIN)
+endif
+
+# if grc is installed, use `grc go` instead of just `go`
+GRC := $(shell command -v grc 2> /dev/null)
+ifdef GRC
+	GO ?= grc go
+else
+	GO ?= go
 endif
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
@@ -21,20 +29,20 @@ all: run
 
 .PHONY: fmt
 fmt: 
-	go fmt ./...
+	$(GO) fmt ./...
 
 .PHONY: vet
 vet: 
-	go vet ./...
+	$(GO) vet ./...
 
 .PHONY: run
 run: fmt vet
-	go run ./...
+	$(GO) run ./...
 
 .PHONY: test
 test: fmt vet
-	if [[ -z "${TEST}" ]]; then go test ./... -v; else go test ./... -v -run "${TEST}"; fi
+	if [[ -z "${TEST}" ]]; then $(GO) test ./... -v; else $(GO) test ./... -v -run "${TEST}"; fi
 
 .PHONY: build
 build: fmt vet
-	go build -o bin/valkey-encoding-analyzer cmd/main.go
+	$(GO) build -o bin/valkey-encoding-analyzer cmd/*.go
