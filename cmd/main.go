@@ -117,12 +117,14 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	cs := makeValkeyNode("")
 	for _, v := range nodes {
 		v.getNodeConfig()
+
 		v.analyzeHash()
 		hashAnalysis = append(hashAnalysis, v.getHashDatatypeAnalysis())
-		cs.updateHashStatistics(&v)
+		cs.HashMetrics.updateHashStatistics(&v.HashMetrics)
 
 		v.analyzeList()
 		listAnalysis = append(listAnalysis, v.getListDatatypeAnalysis())
+		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
 	}
 	if *printOutput {
 		fmt.Println("# Hash Datatype Analysis")
@@ -136,6 +138,9 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		fmt.Println("# List Datatype Analysis")
 		for _, l := range listAnalysis {
 			fmt.Println(l)
+		}
+		if isCluster {
+			fmt.Println(cs.getListDatatypeAnalysis())
 		}
 	}
 

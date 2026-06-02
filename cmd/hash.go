@@ -143,16 +143,16 @@ func (v *ValkeyNode) getHashDatatypeAnalysis() string {
 	return sb.String()
 }
 
-func (v *ValkeyNode) updateHashStatistics(node *ValkeyNode) {
-	runningTotalField := (v.HashMetrics.fieldCount + node.HashMetrics.fieldCount)
-	runningTotalFieldSize := (float64(v.HashMetrics.fieldCount*int(v.HashMetrics.avgFieldSize)) + float64(node.HashMetrics.fieldCount*int(node.HashMetrics.avgFieldSize)))
-	v.HashMetrics.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	v.HashMetrics.fieldCount = runningTotalField
-	if node.HashMetrics.maxFieldSize > v.HashMetrics.maxFieldSize {
-		v.HashMetrics.maxFieldSize = node.HashMetrics.maxFieldSize
-		v.HashMetrics.maxField = node.HashMetrics.maxField
+func (hm *HashMetrics) updateHashStatistics(node *HashMetrics) {
+	runningTotalField := (hm.fieldCount + node.fieldCount)
+	runningTotalFieldSize := (float64(hm.fieldCount*int(hm.avgFieldSize)) + float64(node.fieldCount*int(node.avgFieldSize)))
+	hm.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
+	hm.fieldCount = runningTotalField
+	if node.maxFieldSize > hm.maxFieldSize {
+		hm.maxFieldSize = node.maxFieldSize
+		hm.maxField = node.maxField
 	}
-	v.HashMetrics.hashTableCount += node.HashMetrics.hashTableCount
-	v.HashMetrics.objCount += node.HashMetrics.objCount
-	v.HashMetrics.tdigest.Merge(node.HashMetrics.tdigest)
+	hm.hashTableCount += node.hashTableCount
+	hm.objCount += node.objCount
+	hm.tdigest.Merge(node.tdigest)
 }

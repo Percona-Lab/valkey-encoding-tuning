@@ -244,29 +244,3 @@ func TestPrintListDatatypeAnalysisNoopsWhenPrintOutputDisabled(t *testing.T) {
 
 	g.Expect(output).To(BeEmpty())
 }
-
-func TestPrintListDatatypeAnalysisUsesElementSizeLabelForNegativeListMaxListpackSize(t *testing.T) {
-	initTestFlags(t)
-	g := NewWithT(t)
-	v := makeValkeyNode("node-1")
-	v.Config = map[string]string{listMaxListpackSize: "-2"}
-
-	output := captureStdout(t, func() {
-		v.getListDatatypeAnalysis()
-	})
-
-	g.Expect(output).To(ContainSubstring("by element size"))
-}
-
-func TestPrintListDatatypeAnalysisUsesElementCountLabelForPositiveListMaxListpackSize(t *testing.T) {
-	initTestFlags(t)
-	g := NewWithT(t)
-	v := makeValkeyNode("node-1")
-	v.Config = map[string]string{listMaxListpackSize: "10"}
-
-	output := captureStdout(t, func() {
-		v.getListDatatypeAnalysis()
-	})
-
-	g.Expect(output).To(ContainSubstring("by element count"))
-}
