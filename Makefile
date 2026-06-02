@@ -37,4 +37,4 @@ test: fmt vet
 
 .PHONY: build
 build: fmt vet
-	go build -o bin/valkey-encoding-analyzer cmd/main.go
+	go build -o bin/valkey-encoding-analyzer cmd/*.go
