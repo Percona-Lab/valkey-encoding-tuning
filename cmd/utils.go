@@ -48,8 +48,7 @@ func (v *ValkeyNode) getCommandStats() (map[string]int, error) {
 
 func (v *ValkeyNode) getUptime() (int, error) {
 	ctx := context.Background()
-	client := createClient((v.Address))
-	defer client.Close()
+	client := v.getClient()
 	info, err := client.Do(ctx,
 		client.B().Arbitrary("INFO", "server").Build(),
 	).ToString()
@@ -82,4 +81,16 @@ func (v *ValkeyNode) printCommandStats() error {
 		fmt.Printf("'%s' total execution: %d, op/s:%d\n", key, value, value/uptime)
 	}
 	return nil
+}
+
+func (v *ValkeyNode) getObjectEncoding(key string) string {
+	ctx := context.Background()
+	client := v.getClient()
+	output, err := client.Do(ctx,
+		client.B().ObjectEncoding().Key(key).Build(),
+	).ToString()
+	if err != nil {
+		return ""
+	}
+	return output
 }

@@ -15,7 +15,7 @@ import (
 func setupListTestNode(t *testing.T) (ValkeyNode, valkey.Client) {
 	t.Helper()
 
-	address := createValkeyInstance()
+	address := createValkeyInstance(false)
 	client := createClient(address)
 	v := makeValkeyNode(address)
 	v.Config = map[string]string{

@@ -43,6 +43,13 @@ Or directly:
 go run ./cmd/... [flags]
 ```
 
+## Unit tests
+To run the unit tests
+
+```bash
+make test
+```
+
 ### Example
 
 ```bash
