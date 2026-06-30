@@ -23,6 +23,10 @@ type Item struct {
 	Price       int
 }
 
+const (
+	defaultPassword = "hello-world"
+)
+
 func initTestFlags(t *testing.T) {
 	t.Helper()
 
@@ -81,7 +85,7 @@ func cleanupValkeyInstance(address string, client valkey.Client) {
 
 // create a Valkey test instance, only allow connections by socket
 // return the path to the socket
-func createValkeyInstance() string {
+func createValkeyInstance(setPassword bool) string {
 	tmpDir, err := os.MkdirTemp("", "valkey-test-*")
 	if err != nil {
 		panic(err)
@@ -99,6 +103,9 @@ func createValkeyInstance() string {
 		"--dir", tmpDir,
 		"--logfile", logPath,
 	)
+	if setPassword {
+		cmd.Args = append(cmd.Args, "--requirepass", defaultPassword)
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
@@ -144,8 +151,10 @@ func TestAnalyzeNode(t *testing.T) {
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
 		g := NewWithT(t)
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
 		g.Eventually(address).To(BeAnExistingFile())
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
 	}) {
@@ -174,7 +183,9 @@ func TestAnalyzeCluster(t *testing.T) {
 	var address string
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
 	}) {
@@ -202,7 +213,9 @@ func TestScanCluster(t *testing.T) {
 	var address string
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, totalKeys)
 	}) {
@@ -238,8 +251,10 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
 		g := NewWithT(t)
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
 		g.Eventually(address).To(BeAnExistingFile())
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
 	}) {
@@ -269,8 +284,10 @@ func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
 		g := NewWithT(t)
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
 		g.Eventually(address).To(BeAnExistingFile())
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
 	}) {
@@ -301,8 +318,10 @@ func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
 		g := NewWithT(t)
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
 		g.Eventually(address).To(BeAnExistingFile())
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
 	}) {
@@ -333,8 +352,10 @@ func TestAnalyzeWithFieldNotMatchingFilter(t *testing.T) {
 	var client valkey.Client
 	if !t.Run("setup env", func(t *testing.T) {
 		g := NewWithT(t)
-		address = createValkeyInstance()
+		address = createValkeyInstance(true)
 		g.Eventually(address).To(BeAnExistingFile())
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
 		generateTestData(client, hashKeysCount)
 	}) {
