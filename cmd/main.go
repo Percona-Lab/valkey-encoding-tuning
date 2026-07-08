@@ -111,36 +111,43 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	nodes := getClusterNodes(bootstrapNode)
 	isCluster := len(nodes) > 1
-	hashAnalysis := make([]string, 0)
-	listAnalysis := make([]string, 0)
+	analyses := make([]Analysis, 0)
 
 	cs := makeValkeyNode("")
 	for _, v := range nodes {
 		v.getNodeConfig()
 
+		var analysis Analysis
 		v.analyzeHash()
-		hashAnalysis = append(hashAnalysis, v.getHashDatatypeAnalysis())
+		v.getHashDatatypeAnalysis(&analysis)
 		cs.HashMetrics.updateHashStatistics(&v.HashMetrics)
 
 		v.analyzeList()
-		listAnalysis = append(listAnalysis, v.getListDatatypeAnalysis())
+		v.getListDatatypeAnalysis(&analysis)
+		analyses = append(analyses, analysis)
 		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
 	}
 	if *printOutput {
+		var clusterAnalysis Analysis
+		if isCluster {
+			cs.getHashDatatypeAnalysis(&clusterAnalysis)
+			cs.getListDatatypeAnalysis(&clusterAnalysis)
+		}
+
 		fmt.Println("# Hash Datatype Analysis")
-		for _, l := range hashAnalysis {
-			fmt.Println(l)
+		for _, analysis := range analyses {
+			fmt.Println(analysis.renderHashMarkdown())
 		}
 		if isCluster {
-			fmt.Println(cs.getHashDatatypeAnalysis())
+			fmt.Println(clusterAnalysis.renderHashMarkdown())
 		}
 
 		fmt.Println("# List Datatype Analysis")
-		for _, l := range listAnalysis {
-			fmt.Println(l)
+		for _, analysis := range analyses {
+			fmt.Println(analysis.renderListMarkdown())
 		}
 		if isCluster {
-			fmt.Println(cs.getListDatatypeAnalysis())
+			fmt.Println(clusterAnalysis.renderListMarkdown())
 		}
 	}
 

@@ -231,16 +231,22 @@ func TestAnalyzeListKeyReturnsErrorForInvalidPositiveListMaxListpackSize(t *test
 	g.Expect(v.analyzeListKey("list:1")).To(HaveOccurred())
 }
 
-func TestPrintListDatatypeAnalysisNoopsWhenPrintOutputDisabled(t *testing.T) {
+func TestGetListDatatypeAnalysisPopulatesStructWithoutPrinting(t *testing.T) {
 	initTestFlags(t)
 	g := NewWithT(t)
 	v := makeValkeyNode("node-1")
 	v.Config = map[string]string{listMaxListpackSize: "-2"}
 	setTestFlag(t, "print-output", "false")
 
+	var analysis Analysis
 	output := captureStdout(t, func() {
-		v.getListDatatypeAnalysis()
+		v.getListDatatypeAnalysis(&analysis)
 	})
 
 	g.Expect(output).To(BeEmpty())
+	g.Expect(analysis.Address).To(Equal("node-1"))
+	g.Expect(analysis.Config[listMaxListpackSize]).To(Equal("-2"))
+	listMetrics := analysis.Metrics["list"].(map[string]any)
+	g.Expect(listMetrics["object_count"]).To(Equal(int64(0)))
+	g.Expect(listMetrics["distribution"]).To(HaveLen(10))
 }

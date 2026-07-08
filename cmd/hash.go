@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/caio/go-tdigest/v5"
 )
@@ -117,30 +116,19 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 	return nil
 }
 
-func (v *ValkeyNode) getHashDatatypeAnalysis() string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Node %s\n", v.Address)
-	fmt.Fprintln(&sb, "### Config")
-	fmt.Fprintf(&sb, "- %s=%s\n", hashMaxListpack, v.Config[hashMaxListpack])
-	fmt.Fprintln(&sb, "### Analysis")
-	if v.HashMetrics.objCount == 0 {
-		fmt.Fprintln(&sb, "N/A (no keys found)")
-		return sb.String()
+func (v *ValkeyNode) getHashDatatypeAnalysis(analysis *Analysis) {
+	analysis.init(v.Address)
+	analysis.Config[hashMaxListpack] = v.Config[hashMaxListpack]
+
+	analysis.Metrics["hash"] = map[string]any{
+		"object_count":        v.HashMetrics.objCount,
+		"hashtable_key_count": v.HashMetrics.hashTableCount,
+		"field_count":         v.HashMetrics.fieldCount,
+		"largest_field":       v.HashMetrics.maxField,
+		"largest_field_size":  v.HashMetrics.maxFieldSize,
+		"avg_field_size":      v.HashMetrics.avgFieldSize,
+		"distribution":        quantileDistribution(v.HashMetrics.tdigest),
 	}
-	fmt.Fprintf(&sb, "- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", v.HashMetrics.hashTableCount, v.HashMetrics.objCount, (float64(v.HashMetrics.hashTableCount) / float64(v.HashMetrics.objCount) * 100))
-	fmt.Fprintf(&sb, "- hash fields count: %d\n", v.HashMetrics.fieldCount)
-	fmt.Fprintf(&sb, "- largest hash field: %s, size:%d \n", v.HashMetrics.maxField, v.HashMetrics.maxFieldSize)
-	fmt.Fprintf(&sb, "- avg field size: %.2f\n", v.HashMetrics.avgFieldSize)
-	fmt.Fprintf(&sb, `- hash fields' size distribution:
-+ Quartile 1 (P25): %.2f
-+ Quartile 2 (P50): %.2f
-+ Quartile 3 (P75): %.2f
-+ Quartile 4 (P99): %.2f
-`, v.HashMetrics.tdigest.Quantile(.25),
-		v.HashMetrics.tdigest.Quantile(0.5),
-		v.HashMetrics.tdigest.Quantile(0.75),
-		v.HashMetrics.tdigest.Quantile(0.99))
-	return sb.String()
 }
 
 func (hm *HashMetrics) updateHashStatistics(node *HashMetrics) {
