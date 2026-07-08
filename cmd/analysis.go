@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"os"
 	"strings"
 )
 
@@ -9,6 +12,11 @@ type Analysis struct {
 	Address string            `json:"address"`
 	Config  map[string]string `json:"config"`
 	Metrics map[string]any    `json:"metrics"`
+}
+
+type AnalysisOutput struct {
+	Nodes   []Analysis `json:"nodes"`
+	Cluster *Analysis  `json:"cluster,omitempty"`
 }
 
 type quantiler interface {
@@ -19,6 +27,9 @@ func quantileDistribution(q quantiler) []float64 {
 	distribution := make([]float64, 10)
 	for i := range distribution {
 		distribution[i] = q.Quantile(float64(i+1) / 10)
+		if math.IsNaN(distribution[i]) {
+			distribution[i] = -1
+		}
 	}
 	return distribution
 }
@@ -89,4 +100,13 @@ func (a Analysis) renderListMarkdown() string {
 		fmt.Fprintf(&sb, "+ P%d: %.2f\n", (i+1)*10, value)
 	}
 	return sb.String()
+}
+
+func writeJson(filename string, output any) error {
+	b, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return os.WriteFile(filename, b, 0644)
 }

@@ -24,6 +24,7 @@ var (
 	fieldPatternRE    *regexp.Regexp
 	printOutput       *bool
 	flagsInitialized  *flag.FlagSet
+	outFile           *string
 )
 
 type ValkeyNode struct {
@@ -127,12 +128,13 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		analyses = append(analyses, analysis)
 		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
 	}
+	var clusterAnalysis Analysis
+	if isCluster {
+		cs.getHashDatatypeAnalysis(&clusterAnalysis)
+		cs.getListDatatypeAnalysis(&clusterAnalysis)
+	}
+
 	if *printOutput {
-		var clusterAnalysis Analysis
-		if isCluster {
-			cs.getHashDatatypeAnalysis(&clusterAnalysis)
-			cs.getListDatatypeAnalysis(&clusterAnalysis)
-		}
 
 		fmt.Println("# Hash Datatype Analysis")
 		for _, analysis := range analyses {
@@ -150,7 +152,17 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 			fmt.Println(clusterAnalysis.renderListMarkdown())
 		}
 	}
-
+	if *outFile != "" {
+		err := writeJson(*outFile,
+			map[string]any{
+				"nodes":   analyses,
+				"cluster": clusterAnalysis,
+			},
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
 	return cs
 }
 
@@ -165,6 +177,7 @@ func initFlags() {
 	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the list keys to be analyzed")
 	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
 	printOutput = flag.Bool("print-output", true, "Print output to stdout")
+	outFile = flag.String("output-file", "", "Output file name")
 	flagsInitialized = flag.CommandLine
 }
 func parseArguments() {
