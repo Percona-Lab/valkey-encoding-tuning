@@ -185,8 +185,7 @@ func estimateListNodeCount(configValue string, elementCount, objectSize int64) (
 	return nodeCount, nil
 }
 
-func (v *ValkeyNode) getListDatatypeAnalysis() string {
-	var sb strings.Builder
+func (v *ValkeyNode) getListDatatypeAnalysis(analysis *Analysis) {
 	var sizeDistrType string
 	lm := v.ListMetrics
 	if lm.nodeDivisionType == BySize {
@@ -194,30 +193,20 @@ func (v *ValkeyNode) getListDatatypeAnalysis() string {
 	} else {
 		sizeDistrType = "element count"
 	}
-	fmt.Fprintf(&sb, "## Node %s\n", v.Address)
-	fmt.Fprintf(&sb, "### Config\n")
-	fmt.Fprintf(&sb, "- %s=%s\n", listMaxListpackSize, v.Config[listMaxListpackSize])
-	fmt.Fprintf(&sb, "- %s=%s\n", listCompressDepth, v.Config[listCompressDepth])
-	fmt.Fprintf(&sb, "### Analysis\n")
-	if lm.objCount == 0 {
-		fmt.Fprintln(&sb, "N/A (no keys found)")
-		return sb.String()
+
+	analysis.init(v.Address)
+	analysis.Config[listMaxListpackSize] = v.Config[listMaxListpackSize]
+	analysis.Config[listCompressDepth] = v.Config[listCompressDepth]
+
+	analysis.Metrics["list"] = map[string]any{
+		"object_count":                 lm.objCount,
+		"estimated_largest_node_count": lm.maxNodeCount,
+		"estimated_avg_node_count":     lm.avgNodeCount,
+		"max_element_count":            lm.maxElementCount,
+		"avg_element_count":            lm.avgElementCount,
+		"size_distribution_type":       sizeDistrType,
+		"distribution":                 quantileDistribution(lm.tdigest),
 	}
-	fmt.Fprintf(&sb, "- list keys found: %d \n", lm.objCount)
-	fmt.Fprintf(&sb, "- estimated largest node count:%d \n", lm.maxNodeCount)
-	fmt.Fprintf(&sb, "- estimated avg node count: %d\n", lm.avgNodeCount)
-	fmt.Fprintf(&sb, "- max element count:%d \n", lm.maxElementCount)
-	fmt.Fprintf(&sb, "- avg element count: %d\n", lm.avgElementCount)
-	fmt.Fprintf(&sb, "- List size distribution (by %s):\n", sizeDistrType)
-	fmt.Fprintf(&sb, `+ Quartile 1 (P25): %.2f
-+ Quartile 2 (P50): %.2f
-+ Quartile 3 (P75): %.2f
-+ Quartile 4 (P99): %.2f
-`, lm.tdigest.Quantile(.25),
-		lm.tdigest.Quantile(0.5),
-		lm.tdigest.Quantile(0.75),
-		lm.tdigest.Quantile(0.99))
-	return sb.String()
 }
 func (lm *ListMetrics) updateListStatistics(node *ListMetrics) {
 	if lm.nodeDivisionType != node.nodeDivisionType {
