@@ -91,7 +91,7 @@ func (v *ValkeyNode) analyzeSetMembers(set string) error {
 		}
 		mCount := 0
 		fTotalSize := 0
-		for i := 0; i < len(entry.Elements); i += 1 {
+		for i := 0; i < len(entry.Elements); i++ {
 			mCount++
 			fSize := len(entry.Elements[i])
 			v.SetMetrics.tdigest.Add(float64(fSize))

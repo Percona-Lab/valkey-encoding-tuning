@@ -335,7 +335,7 @@ func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
 		parseArguments()
 		g.Expect(v.getNodeConfig()).To(Succeed())
 		g.Expect(v.analyzeHash()).To(Succeed())
-		g.Expect(v.HashMetrics.fieldCount).To(Equal(hashKeysCount))
+		g.Expect(v.HashMetrics.fieldCount).To(Equal(hashKeysCount * 2))
 		g.Expect(v.HashMetrics.maxField).To(ContainSubstring(".name"))
 	})
 	t.Cleanup(func() {

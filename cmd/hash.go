@@ -93,14 +93,20 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			if fieldPatternRE != nil && !fieldPatternRE.MatchString(entry.Elements[i]) {
 				continue
 			}
-			fCount++
-			fSize := len(entry.Elements[i+1])
+			fCount += 2
+			fSize := len(entry.Elements[i])
+			vSize := len(entry.Elements[i+1])
 			v.HashMetrics.tdigest.Add(float64(fSize))
-			fTotalSize += fSize
-			isHashtable = fSize > +maxLpSize
+			v.HashMetrics.tdigest.Add(float64(vSize))
+			fTotalSize += fSize + vSize
+			isHashtable = (fSize >= maxLpSize || vSize >= maxLpSize)
 			if fSize > v.HashMetrics.maxFieldSize {
 				v.HashMetrics.maxFieldSize = fSize
 				v.HashMetrics.maxField = fmt.Sprintf("%s.%s", hash, entry.Elements[i])
+			}
+			if vSize > v.HashMetrics.maxFieldSize {
+				v.HashMetrics.maxFieldSize = vSize
+				v.HashMetrics.maxField = fmt.Sprintf("%s.%s (field name)", hash, entry.Elements[i])
 			}
 		}
 		if fCount > 0 {
