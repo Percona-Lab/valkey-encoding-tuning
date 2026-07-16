@@ -73,6 +73,7 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 	ctx := context.Background()
 	client := v.getClient()
 	var cursor uint64
+	var isHashtable bool
 	maxLpSize, err := strconv.Atoi(v.Config[hashMaxListpack])
 	if err != nil {
 		return err
@@ -96,9 +97,7 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			fSize := len(entry.Elements[i+1])
 			v.HashMetrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
-			if fSize >= maxLpSize {
-				v.HashMetrics.hashTableCount++
-			}
+			isHashtable = fSize > +maxLpSize
 			if fSize > v.HashMetrics.maxFieldSize {
 				v.HashMetrics.maxFieldSize = fSize
 				v.HashMetrics.maxField = fmt.Sprintf("%s.%s", hash, entry.Elements[i])
@@ -113,6 +112,10 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			break
 		}
 	}
+	if isHashtable {
+		v.HashMetrics.hashTableCount++
+	}
+
 	return nil
 }
 

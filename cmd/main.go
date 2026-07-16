@@ -20,6 +20,7 @@ var (
 	bootstrapPassword *string
 	hashKeyPattern    *string
 	listKeyPattern    *string
+	setKeyPattern     *string
 	fieldPattern      *string
 	fieldPatternRE    *regexp.Regexp
 	printOutput       *bool
@@ -33,6 +34,7 @@ type ValkeyNode struct {
 	Config      map[string]string
 	HashMetrics HashMetrics
 	ListMetrics ListMetrics
+	SetMetrics  SetMetrics
 }
 
 func (v *ValkeyNode) getClient() valkey.Client {
@@ -78,6 +80,7 @@ func makeValkeyNode(address string) ValkeyNode {
 		Address:     address,
 		HashMetrics: makeHashMetrics(),
 		ListMetrics: makeListMetrics(),
+		SetMetrics:  makeSetMetrics(),
 	}
 }
 
@@ -175,6 +178,7 @@ func initFlags() {
 	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
 	hashKeyPattern = flag.String("hash-key-pattern", "", "Pattern (glob style) of the hash keys to be analyzed")
 	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the list keys to be analyzed")
+	setKeyPattern = flag.String("set-key-pattern", "", "Pattern (glob style) of the set keys to be analyzed")
 	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
 	printOutput = flag.Bool("print-output", true, "Print output to stdout")
 	outFile = flag.String("output-file", "", "Output file name")
