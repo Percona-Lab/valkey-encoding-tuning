@@ -168,6 +168,22 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		if isCluster {
 			fmt.Println(clusterAnalysis.renderListMarkdown())
 		}
+
+		fmt.Println("# Set Datatype Analysis")
+		for _, analysis := range analyses {
+			fmt.Println(analysis.renderSetMarkdown())
+		}
+		if isCluster {
+			fmt.Println(clusterAnalysis.renderSetMarkdown())
+		}
+
+		fmt.Println("# Sorted Set Datatype Analysis")
+		for _, analysis := range analyses {
+			fmt.Println(analysis.renderZSetMarkdown())
+		}
+		if isCluster {
+			fmt.Println(clusterAnalysis.renderZSetMarkdown())
+		}
 	}
 	if *outFile != "" {
 		err := writeJson(*outFile,

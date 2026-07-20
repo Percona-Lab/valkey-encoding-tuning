@@ -102,6 +102,60 @@ func (a Analysis) renderListMarkdown() string {
 	return sb.String()
 }
 
+func (a Analysis) renderSetMarkdown() string {
+	var sb strings.Builder
+	metrics := a.datatypeMetrics(setDt)
+	fmt.Fprintf(&sb, "## Node %s\n", a.Address)
+	fmt.Fprintln(&sb, "### Config")
+	fmt.Fprintf(&sb, "- %s=%s\n", setMaxListpackValue, a.Config[setMaxListpackValue])
+	fmt.Fprintf(&sb, "- %s=%s\n", setMaxListpackEntries, a.Config[setMaxListpackEntries])
+	fmt.Fprintln(&sb, "### Analysis")
+
+	objCount, _ := metrics["object_count"].(int)
+	if objCount == 0 {
+		fmt.Fprintln(&sb, "N/A (no keys found)")
+		return sb.String()
+	}
+
+	hashTableCount := metrics["hashtable_key_count"].(uint64)
+	fmt.Fprintf(&sb, "- hashtable keys found: %d/%d (%.2f%% of all set keys)\n", hashTableCount, objCount, (float64(hashTableCount) / float64(objCount) * 100))
+	fmt.Fprintf(&sb, "- set members count: %d\n", metrics["items_count"].(int))
+	fmt.Fprintf(&sb, "- largest set member: %s, size:%d \n", metrics["largest_field"].(string), metrics["largest_field_size"].(int))
+	fmt.Fprintf(&sb, "- avg member size: %.2f\n", metrics["avg_field_size"].(float64))
+	fmt.Fprintln(&sb, "- set members' size distribution:")
+	for i, value := range metrics["distribution"].([]float64) {
+		fmt.Fprintf(&sb, "+ P%d: %.2f\n", (i+1)*10, value)
+	}
+	return sb.String()
+}
+
+func (a Analysis) renderZSetMarkdown() string {
+	var sb strings.Builder
+	metrics := a.datatypeMetrics(zsetDt)
+	fmt.Fprintf(&sb, "## Node %s\n", a.Address)
+	fmt.Fprintln(&sb, "### Config")
+	fmt.Fprintf(&sb, "- %s=%s\n", zsetMaxListpackValue, a.Config[zsetMaxListpackValue])
+	fmt.Fprintf(&sb, "- %s=%s\n", zsetMaxListpackEntries, a.Config[zsetMaxListpackEntries])
+	fmt.Fprintln(&sb, "### Analysis")
+
+	objCount, _ := metrics["object_count"].(int)
+	if objCount == 0 {
+		fmt.Fprintln(&sb, "N/A (no keys found)")
+		return sb.String()
+	}
+
+	skipListCount := metrics["skiplist_key_count"].(uint64)
+	fmt.Fprintf(&sb, "- skiplist keys found: %d/%d (%.2f%% of all zset keys)\n", skipListCount, objCount, (float64(skipListCount) / float64(objCount) * 100))
+	fmt.Fprintf(&sb, "- zset members count: %d\n", metrics["items_count"].(int))
+	fmt.Fprintf(&sb, "- largest zset member: %s, size:%d \n", metrics["largest_field"].(string), metrics["largest_field_size"].(int))
+	fmt.Fprintf(&sb, "- avg member size: %.2f\n", metrics["avg_field_size"].(float64))
+	fmt.Fprintln(&sb, "- zset members' size distribution:")
+	for i, value := range metrics["distribution"].([]float64) {
+		fmt.Fprintf(&sb, "+ P%d: %.2f\n", (i+1)*10, value)
+	}
+	return sb.String()
+}
+
 func writeJson(filename string, output any) error {
 	b, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
