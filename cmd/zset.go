@@ -46,7 +46,7 @@ func (v *ValkeyNode) analyzeZSet() error {
 		if *zsetKeyPattern != "" {
 			scanCmd.Match(*zsetKeyPattern)
 		}
-		scanCmd.Type(setDt)
+		scanCmd.Type(zsetDt)
 		resp := client.Do(
 			ctx,
 			scanCmd.Build(),
@@ -76,7 +76,7 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 	client := v.getClient()
 	var cursor uint64
 	var isHashtable bool
-	metrics := v.ZSetMetrics
+	metrics := &v.ZSetMetrics
 	maxLpSize, err := strconv.Atoi(v.Config[zsetMaxListpackValue])
 	if err != nil {
 		return err
@@ -120,10 +120,10 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 
 func (v *ValkeyNode) getZSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.init(v.Address)
-	analysis.Config[setMaxListpackValue] = v.Config[setMaxListpackValue]
-	analysis.Config[setMaxListpackEntries] = v.Config[setMaxListpackEntries]
+	analysis.Config[zsetMaxListpackValue] = v.Config[zsetMaxListpackValue]
+	analysis.Config[zsetMaxListpackEntries] = v.Config[zsetMaxListpackEntries]
 	metrics := v.ZSetMetrics
-	analysis.Metrics[setDt] = map[string]any{
+	analysis.Metrics[zsetDt] = map[string]any{
 		"object_count":       metrics.objCount,
 		"skiplist_key_count": metrics.skipListCount,
 		"items_count":        metrics.memberCount,
