@@ -180,13 +180,13 @@ func (v *ValkeyNode) getListDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[listCompressDepth] = v.Config[listCompressDepth]
 
 	analysis.Metrics[listDt] = map[string]any{
-		"object_count":                 lm.objCount,
-		"estimated_largest_node_count": lm.maxNodeCount,
-		"estimated_avg_node_count":     lm.avgNodeCount,
-		"max_element_count":            lm.maxElementCount,
-		"avg_element_count":            lm.avgElementCount,
-		"size_distribution_type":       sizeDistrType,
-		"distribution":                 quantileDistribution(lm.tdigest),
+		kObjCount:        lm.objCount,
+		kMaxNodeCount:    lm.maxNodeCount,
+		kAvgNodeCount:    lm.avgNodeCount,
+		kMaxElementCount: lm.maxElementCount,
+		kAvgElementCount: lm.avgElementCount,
+		kSizeDistrType:   sizeDistrType,
+		kDistribution:    quantileDistribution(lm.tdigest),
 	}
 }
 func (lm *ListMetrics) updateListStatistics(node *ListMetrics) {

@@ -21,8 +21,8 @@ func TestWriteJsonWritesIndentedAnalysisOutput(t *testing.T) {
 				Config:  map[string]string{hashMaxListpack: "64"},
 				Metrics: map[string]any{
 					"hash": map[string]any{
-						"object_count": 1,
-						"distribution": []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+						kObjCount:     1,
+						kDistribution: []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 					},
 				},
 			},
@@ -51,13 +51,13 @@ func TestRenderSetMarkdown(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			setDt: map[string]any{
-				"object_count":         2,
-				"hashtable_key_count":  uint64(1),
-				"items_count":          4,
-				"largest_element":      "set:1.large",
-				"largest_element_size": 5,
-				"avg_element_size":     float64(3),
-				"distribution":         []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+				kObjCount:       2,
+				kHtKeyCount:     uint64(1),
+				kElementsCount:  4,
+				kMaxElement:     "set:1.large",
+				kMaxElementSize: 5,
+				kAvgElementSize: float64(3),
+				kDistribution:   []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 			},
 		},
 	}
@@ -82,7 +82,7 @@ func TestRenderSetMarkdownWithNoKeys(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			setDt: map[string]any{
-				"object_count": 0,
+				kObjCount: 0,
 			},
 		},
 	}
@@ -102,13 +102,13 @@ func TestRenderZSetMarkdown(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			zsetDt: map[string]any{
-				"object_count":         2,
-				"skiplist_key_count":   uint64(1),
-				"items_count":          4,
-				"largest_element":      "zset:1.large",
-				"largest_element_size": 5,
-				"avg_element_size":     float64(3),
-				"distribution":         []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+				kObjCount:       2,
+				kSlKeyCount:     uint64(1),
+				kElementsCount:  4,
+				kMaxElement:     "zset:1.large",
+				kMaxElementSize: 5,
+				kAvgElementSize: float64(3),
+				kDistribution:   []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 			},
 		},
 	}
@@ -133,7 +133,7 @@ func TestRenderZSetMarkdownWithNoKeys(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			zsetDt: map[string]any{
-				"object_count": 0,
+				kObjCount: 0,
 			},
 		},
 	}

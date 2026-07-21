@@ -104,7 +104,7 @@ func TestAnalyzeSetMembersUpdatesMemberMetrics(t *testing.T) {
 
 	g.Expect(v.analyzeSetMembers("set:1")).To(Succeed())
 
-	g.Expect(v.SetMetrics.memberCount).To(Equal(4), "expect SetMetrics.memberCount to be %d, got %d", 4, v.SetMetrics.memberCount)
+	g.Expect(v.SetMetrics.elementCount).To(Equal(4), "expect SetMetrics.memberCount to be %d, got %d", 4, v.SetMetrics.elementCount)
 	g.Expect(v.SetMetrics.maxElementSize).To(Equal(len(longMember)))
 	g.Expect(v.SetMetrics.maxElement).To(Equal("set:1." + longMember))
 	g.Expect(v.SetMetrics.avgElementSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
@@ -150,7 +150,7 @@ func TestGetSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 		setMaxListpackEntries: "128",
 	}
 	v.SetMetrics.objCount = 1
-	v.SetMetrics.memberCount = 2
+	v.SetMetrics.elementCount = 2
 	v.SetMetrics.hashTableCount = 1
 	v.SetMetrics.maxElement = "set:1.large"
 	v.SetMetrics.maxElementSize = 5
@@ -163,20 +163,20 @@ func TestGetSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	g.Expect(analysis.Config[setMaxListpackValue]).To(Equal("64"))
 	g.Expect(analysis.Config[setMaxListpackEntries]).To(Equal("128"))
 	setMetrics := analysis.Metrics[setDt].(map[string]any)
-	g.Expect(setMetrics["object_count"]).To(Equal(1))
-	g.Expect(setMetrics["items_count"]).To(Equal(2))
-	g.Expect(setMetrics["hashtable_key_count"]).To(Equal(uint64(1)))
-	g.Expect(setMetrics["largest_element"]).To(Equal("set:1.large"))
-	g.Expect(setMetrics["largest_element_size"]).To(Equal(5))
-	g.Expect(setMetrics["avg_element_size"]).To(Equal(float64(3)))
-	g.Expect(setMetrics["distribution"]).To(HaveLen(10))
+	g.Expect(setMetrics[kObjCount]).To(Equal(1))
+	g.Expect(setMetrics[kElementsCount]).To(Equal(2))
+	g.Expect(setMetrics[kHtKeyCount]).To(Equal(uint64(1)))
+	g.Expect(setMetrics[kMaxElement]).To(Equal("set:1.large"))
+	g.Expect(setMetrics[kMaxElementSize]).To(Equal(5))
+	g.Expect(setMetrics[kAvgElementSize]).To(Equal(float64(3)))
+	g.Expect(setMetrics[kDistribution]).To(HaveLen(10))
 }
 
 func TestUpdateSetStatisticsMergesNodeMetrics(t *testing.T) {
 	g := NewWithT(t)
 	cluster := makeSetMetrics()
 	cluster.objCount = 1
-	cluster.memberCount = 2
+	cluster.elementCount = 2
 	cluster.avgElementSize = 2
 	cluster.hashTableCount = 1
 	cluster.maxElement = "set:1.small"
@@ -185,7 +185,7 @@ func TestUpdateSetStatisticsMergesNodeMetrics(t *testing.T) {
 
 	node := makeSetMetrics()
 	node.objCount = 2
-	node.memberCount = 3
+	node.elementCount = 3
 	node.avgElementSize = 6
 	node.hashTableCount = 2
 	node.maxElement = "set:2.large"
@@ -195,7 +195,7 @@ func TestUpdateSetStatisticsMergesNodeMetrics(t *testing.T) {
 	cluster.updateSetStatistics(&node)
 
 	g.Expect(cluster.objCount).To(Equal(3))
-	g.Expect(cluster.memberCount).To(Equal(5))
+	g.Expect(cluster.elementCount).To(Equal(5))
 	g.Expect(cluster.avgElementSize).To(Equal(4.4))
 	g.Expect(cluster.hashTableCount).To(Equal(uint64(3)))
 	g.Expect(cluster.maxElement).To(Equal("set:2.large"))

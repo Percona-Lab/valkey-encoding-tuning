@@ -17,7 +17,7 @@ const (
 type ZSetMetrics struct {
 	tdigest        *tdigest.TDigest
 	objCount       int
-	memberCount    int
+	elementCount   int
 	skipListCount  uint64
 	maxElement     string
 	avgElementSize float64
@@ -88,8 +88,8 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 			}
 		}
 		if mCount > 0 {
-			metrics.avgElementSize = float64((fTotalSize + int(float64(metrics.memberCount)*metrics.avgElementSize)) / (metrics.memberCount + mCount))
-			metrics.memberCount += mCount
+			metrics.avgElementSize = float64((fTotalSize + int(float64(metrics.elementCount)*metrics.avgElementSize)) / (metrics.elementCount + mCount))
+			metrics.elementCount += mCount
 		}
 		cursor = entry.Cursor
 		if cursor == 0 {
@@ -108,21 +108,21 @@ func (v *ValkeyNode) getZSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[zsetMaxListpackEntries] = v.Config[zsetMaxListpackEntries]
 	metrics := v.ZSetMetrics
 	analysis.Metrics[zsetDt] = map[string]any{
-		"object_count":         metrics.objCount,
-		"skiplist_key_count":   metrics.skipListCount,
-		"items_count":          metrics.memberCount,
-		"largest_element":      metrics.maxElement,
-		"largest_element_size": metrics.maxElementSize,
-		"avg_element_size":     metrics.avgElementSize,
-		"distribution":         quantileDistribution(metrics.tdigest),
+		kObjCount:       metrics.objCount,
+		kSlKeyCount:     metrics.skipListCount,
+		kElementsCount:  metrics.elementCount,
+		kMaxElement:     metrics.maxElement,
+		kMaxElementSize: metrics.maxElementSize,
+		kAvgElementSize: metrics.avgElementSize,
+		kDistribution:   quantileDistribution(metrics.tdigest),
 	}
 }
 
 func (zm *ZSetMetrics) updateZSetStatistics(node *ZSetMetrics) {
-	runningTotalField := (zm.memberCount + node.memberCount)
-	runningTotalFieldSize := (float64(zm.memberCount*int(zm.avgElementSize)) + float64(node.memberCount*int(node.avgElementSize)))
+	runningTotalField := (zm.elementCount + node.elementCount)
+	runningTotalFieldSize := (float64(zm.elementCount*int(zm.avgElementSize)) + float64(node.elementCount*int(node.avgElementSize)))
 	zm.avgElementSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	zm.memberCount = runningTotalField
+	zm.elementCount = runningTotalField
 	if node.maxElementSize > zm.maxElementSize {
 		zm.maxElementSize = node.maxElementSize
 		zm.maxElement = node.maxElement

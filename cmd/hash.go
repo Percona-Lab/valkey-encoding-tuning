@@ -13,16 +13,6 @@ const (
 	hashDt          = "hash"
 )
 
-const (
-	kObjCount          = "object_count"
-	kHtKeyCount        = "hashtable_key_count"
-	kFieldCount        = "hash_field_count"
-	kMaxField          = "largest_field"
-	kMaxFieldSize      = "largest_field_size"
-	kAvgFieldSize      = "avg_field_size"
-	kFieldDistribution = "size_distribution"
-)
-
 type HashMetrics struct {
 	tdigest        *tdigest.TDigest
 	objCount       int
@@ -125,13 +115,13 @@ func (v *ValkeyNode) getHashDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[hashMaxListpack] = v.Config[hashMaxListpack]
 
 	analysis.Metrics[hashDt] = map[string]any{
-		kObjCount:          v.HashMetrics.objCount,
-		kHtKeyCount:        v.HashMetrics.hashTableCount,
-		kFieldCount:        v.HashMetrics.fieldCount,
-		kMaxField:          v.HashMetrics.maxField,
-		kMaxFieldSize:      v.HashMetrics.maxFieldSize,
-		kAvgFieldSize:      v.HashMetrics.avgFieldSize,
-		kFieldDistribution: quantileDistribution(v.HashMetrics.tdigest),
+		kObjCount:     v.HashMetrics.objCount,
+		kHtKeyCount:   v.HashMetrics.hashTableCount,
+		kFieldCount:   v.HashMetrics.fieldCount,
+		kMaxField:     v.HashMetrics.maxField,
+		kMaxFieldSize: v.HashMetrics.maxFieldSize,
+		kAvgFieldSize: v.HashMetrics.avgFieldSize,
+		kDistribution: quantileDistribution(v.HashMetrics.tdigest),
 	}
 }
 

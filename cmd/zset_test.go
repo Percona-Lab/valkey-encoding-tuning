@@ -105,7 +105,7 @@ func TestAnalyzeZSetMembersUpdatesMemberMetrics(t *testing.T) {
 
 	g.Expect(v.analyzeZSetMembers("zset:1")).To(Succeed())
 
-	g.Expect(v.ZSetMetrics.memberCount).To(Equal(4))
+	g.Expect(v.ZSetMetrics.elementCount).To(Equal(4))
 	g.Expect(v.ZSetMetrics.maxElementSize).To(Equal(len(longMember)))
 	g.Expect(v.ZSetMetrics.maxElement).To(Equal("zset:1." + longMember))
 	g.Expect(v.ZSetMetrics.avgElementSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
@@ -140,7 +140,7 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 		zsetMaxListpackEntries: "128",
 	}
 	v.ZSetMetrics.objCount = 1
-	v.ZSetMetrics.memberCount = 2
+	v.ZSetMetrics.elementCount = 2
 	v.ZSetMetrics.skipListCount = 1
 	v.ZSetMetrics.maxElement = "zset:1.large"
 	v.ZSetMetrics.maxElementSize = 5
@@ -157,20 +157,20 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	if !ok {
 		return
 	}
-	g.Expect(zsetMetrics["object_count"]).To(Equal(1))
-	g.Expect(zsetMetrics["items_count"]).To(Equal(2))
-	g.Expect(zsetMetrics["skiplist_key_count"]).To(Equal(uint64(1)))
-	g.Expect(zsetMetrics["largest_element"]).To(Equal("zset:1.large"))
-	g.Expect(zsetMetrics["largest_element_size"]).To(Equal(5))
-	g.Expect(zsetMetrics["avg_element_size"]).To(Equal(float64(3)))
-	g.Expect(zsetMetrics["distribution"]).To(HaveLen(10))
+	g.Expect(zsetMetrics[kObjCount]).To(Equal(1))
+	g.Expect(zsetMetrics[kElementsCount]).To(Equal(2))
+	g.Expect(zsetMetrics[kSlKeyCount]).To(Equal(uint64(1)))
+	g.Expect(zsetMetrics[kMaxElement]).To(Equal("zset:1.large"))
+	g.Expect(zsetMetrics[kMaxElementSize]).To(Equal(5))
+	g.Expect(zsetMetrics[kAvgElementSize]).To(Equal(float64(3)))
+	g.Expect(zsetMetrics[kDistribution]).To(HaveLen(10))
 }
 
 func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	g := NewWithT(t)
 	cluster := makeZSetMetrics()
 	cluster.objCount = 1
-	cluster.memberCount = 2
+	cluster.elementCount = 2
 	cluster.avgElementSize = 2
 	cluster.skipListCount = 1
 	cluster.maxElement = "zset:1.small"
@@ -179,7 +179,7 @@ func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 
 	node := makeZSetMetrics()
 	node.objCount = 2
-	node.memberCount = 3
+	node.elementCount = 3
 	node.avgElementSize = 6
 	node.skipListCount = 2
 	node.maxElement = "zset:2.large"
@@ -189,7 +189,7 @@ func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	cluster.updateZSetStatistics(&node)
 
 	g.Expect(cluster.objCount).To(Equal(3))
-	g.Expect(cluster.memberCount).To(Equal(5))
+	g.Expect(cluster.elementCount).To(Equal(5))
 	g.Expect(cluster.avgElementSize).To(Equal(4.4))
 	g.Expect(cluster.skipListCount).To(Equal(uint64(3)))
 	g.Expect(cluster.maxElement).To(Equal("zset:2.large"))

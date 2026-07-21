@@ -17,7 +17,7 @@ const (
 type SetMetrics struct {
 	tdigest        *tdigest.TDigest
 	objCount       int
-	memberCount    int
+	elementCount   int
 	hashTableCount uint64
 	maxElement     string
 	avgElementSize float64
@@ -87,8 +87,8 @@ func (v *ValkeyNode) analyzeSetMembers(set string) error {
 			}
 		}
 		if mCount > 0 {
-			v.SetMetrics.avgElementSize = float64((fTotalSize + int(float64(v.SetMetrics.memberCount)*v.SetMetrics.avgElementSize)) / (v.SetMetrics.memberCount + mCount))
-			v.SetMetrics.memberCount += mCount
+			v.SetMetrics.avgElementSize = float64((fTotalSize + int(float64(v.SetMetrics.elementCount)*v.SetMetrics.avgElementSize)) / (v.SetMetrics.elementCount + mCount))
+			v.SetMetrics.elementCount += mCount
 		}
 		cursor = entry.Cursor
 		if cursor == 0 {
@@ -107,21 +107,21 @@ func (v *ValkeyNode) getSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[setMaxListpackEntries] = v.Config[setMaxListpackEntries]
 	metrics := v.SetMetrics
 	analysis.Metrics[setDt] = map[string]any{
-		"object_count":         metrics.objCount,
-		"hashtable_key_count":  metrics.hashTableCount,
-		"items_count":          metrics.memberCount,
-		"largest_element":      metrics.maxElement,
-		"largest_element_size": metrics.maxElementSize,
-		"avg_element_size":     metrics.avgElementSize,
-		"distribution":         quantileDistribution(metrics.tdigest),
+		kObjCount:       metrics.objCount,
+		kHtKeyCount:     metrics.hashTableCount,
+		kElementsCount:  metrics.elementCount,
+		kMaxElement:     metrics.maxElement,
+		kMaxElementSize: metrics.maxElementSize,
+		kAvgElementSize: metrics.avgElementSize,
+		kDistribution:   quantileDistribution(metrics.tdigest),
 	}
 }
 
 func (sm *SetMetrics) updateSetStatistics(node *SetMetrics) {
-	runningTotalField := (sm.memberCount + node.memberCount)
-	runningTotalFieldSize := (float64(sm.memberCount*int(sm.avgElementSize)) + float64(node.memberCount*int(node.avgElementSize)))
+	runningTotalField := (sm.elementCount + node.elementCount)
+	runningTotalFieldSize := (float64(sm.elementCount*int(sm.avgElementSize)) + float64(node.elementCount*int(node.avgElementSize)))
 	sm.avgElementSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	sm.memberCount = runningTotalField
+	sm.elementCount = runningTotalField
 	if node.maxElementSize > sm.maxElementSize {
 		sm.maxElementSize = node.maxElementSize
 		sm.maxElement = node.maxElement

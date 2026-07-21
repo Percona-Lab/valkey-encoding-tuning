@@ -246,7 +246,7 @@ func TestGetListDatatypeAnalysisPopulatesStructWithoutPrinting(t *testing.T) {
 	g.Expect(output).To(BeEmpty())
 	g.Expect(analysis.Address).To(Equal("node-1"))
 	g.Expect(analysis.Config[listMaxListpackSize]).To(Equal("-2"))
-	listMetrics := analysis.Metrics["list"].(map[string]any)
-	g.Expect(listMetrics["object_count"]).To(Equal(int64(0)))
-	g.Expect(listMetrics["distribution"]).To(HaveLen(10))
+	listMetrics := analysis.Metrics[listDt].(map[string]any)
+	g.Expect(listMetrics[kObjCount]).To(Equal(int64(0)))
+	g.Expect(listMetrics[kDistribution]).To(HaveLen(10))
 }
