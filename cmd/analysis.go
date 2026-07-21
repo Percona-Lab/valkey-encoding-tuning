@@ -119,10 +119,10 @@ func (a Analysis) renderSetMarkdown() string {
 
 	hashTableCount := metrics["hashtable_key_count"].(uint64)
 	fmt.Fprintf(&sb, "- hashtable keys found: %d/%d (%.2f%% of all set keys)\n", hashTableCount, objCount, (float64(hashTableCount) / float64(objCount) * 100))
-	fmt.Fprintf(&sb, "- set members count: %d\n", metrics["items_count"].(int))
-	fmt.Fprintf(&sb, "- largest set member: %s, size:%d \n", metrics["largest_field"].(string), metrics["largest_field_size"].(int))
-	fmt.Fprintf(&sb, "- avg member size: %.2f\n", metrics["avg_field_size"].(float64))
-	fmt.Fprintln(&sb, "- set members' size distribution:")
+	fmt.Fprintf(&sb, "- set elements count: %d\n", metrics["items_count"].(int))
+	fmt.Fprintf(&sb, "- largest set element: %s, size:%d \n", metrics["largest_element"].(string), metrics["largest_element_size"].(int))
+	fmt.Fprintf(&sb, "- average element size: %.2f\n", metrics["avg_element_size"].(float64))
+	fmt.Fprintln(&sb, "- set elements' size distribution:")
 	for i, value := range metrics["distribution"].([]float64) {
 		fmt.Fprintf(&sb, "+ P%d: %.2f\n", (i+1)*10, value)
 	}
@@ -146,10 +146,10 @@ func (a Analysis) renderZSetMarkdown() string {
 
 	skipListCount := metrics["skiplist_key_count"].(uint64)
 	fmt.Fprintf(&sb, "- skiplist keys found: %d/%d (%.2f%% of all zset keys)\n", skipListCount, objCount, (float64(skipListCount) / float64(objCount) * 100))
-	fmt.Fprintf(&sb, "- zset members count: %d\n", metrics["items_count"].(int))
-	fmt.Fprintf(&sb, "- largest zset member: %s, size:%d \n", metrics["largest_field"].(string), metrics["largest_field_size"].(int))
-	fmt.Fprintf(&sb, "- avg member size: %.2f\n", metrics["avg_field_size"].(float64))
-	fmt.Fprintln(&sb, "- zset members' size distribution:")
+	fmt.Fprintf(&sb, "- zset elements count: %d\n", metrics["items_count"].(int))
+	fmt.Fprintf(&sb, "- largest zset element: %s, size:%d \n", metrics["largest_element"].(string), metrics["largest_element_size"].(int))
+	fmt.Fprintf(&sb, "- average element size: %.2f\n", metrics["avg_element_size"].(float64))
+	fmt.Fprintln(&sb, "- zset elements' size distribution:")
 	for i, value := range metrics["distribution"].([]float64) {
 		fmt.Fprintf(&sb, "+ P%d: %.2f\n", (i+1)*10, value)
 	}

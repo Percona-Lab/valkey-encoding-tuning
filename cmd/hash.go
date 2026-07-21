@@ -10,6 +10,17 @@ import (
 
 const (
 	hashMaxListpack = "hash-max-listpack-value"
+	hashDt          = "hash"
+)
+
+const (
+	kObjCount          = "object_count"
+	kHtKeyCount        = "hashtable_key_count"
+	kFieldCount        = "hash_field_count"
+	kMaxField          = "largest_field"
+	kMaxFieldSize      = "largest_field_size"
+	kAvgFieldSize      = "avg_field_size"
+	kFieldDistribution = "size_distribution"
 )
 
 type HashMetrics struct {
@@ -31,25 +42,9 @@ func makeHashMetrics() HashMetrics {
 }
 
 func (v *ValkeyNode) analyzeHash() error {
-	ctx := context.Background()
-
-	client := v.getClient()
-	err := client.Do(ctx, client.B().Readonly().Build()).Error()
-	if err != nil {
-		panic(err)
-	}
 	var cursor uint64
 	for {
-		scanCmd := client.B().Scan().Cursor(cursor)
-		if *hashKeyPattern != "" {
-			scanCmd.Match(*hashKeyPattern)
-		}
-		scanCmd.Type("hash")
-		resp := client.Do(
-			ctx,
-			scanCmd.Build(),
-		)
-		entry, err := resp.AsScanEntry()
+		entry, err := scan(v.getClient(), hashDt, *hashKeyPattern, cursor)
 		if err != nil {
 			return err
 		}
@@ -129,14 +124,14 @@ func (v *ValkeyNode) getHashDatatypeAnalysis(analysis *Analysis) {
 	analysis.init(v.Address)
 	analysis.Config[hashMaxListpack] = v.Config[hashMaxListpack]
 
-	analysis.Metrics["hash"] = map[string]any{
-		"object_count":        v.HashMetrics.objCount,
-		"hashtable_key_count": v.HashMetrics.hashTableCount,
-		"field_count":         v.HashMetrics.fieldCount,
-		"largest_field":       v.HashMetrics.maxField,
-		"largest_field_size":  v.HashMetrics.maxFieldSize,
-		"avg_field_size":      v.HashMetrics.avgFieldSize,
-		"distribution":        quantileDistribution(v.HashMetrics.tdigest),
+	analysis.Metrics[hashDt] = map[string]any{
+		kObjCount:          v.HashMetrics.objCount,
+		kHtKeyCount:        v.HashMetrics.hashTableCount,
+		kFieldCount:        v.HashMetrics.fieldCount,
+		kMaxField:          v.HashMetrics.maxField,
+		kMaxFieldSize:      v.HashMetrics.maxFieldSize,
+		kAvgFieldSize:      v.HashMetrics.avgFieldSize,
+		kFieldDistribution: quantileDistribution(v.HashMetrics.tdigest),
 	}
 }
 

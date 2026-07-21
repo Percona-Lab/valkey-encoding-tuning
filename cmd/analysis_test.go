@@ -51,13 +51,13 @@ func TestRenderSetMarkdown(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			setDt: map[string]any{
-				"object_count":        2,
-				"hashtable_key_count": uint64(1),
-				"items_count":         4,
-				"largest_field":       "set:1.large",
-				"largest_field_size":  5,
-				"avg_field_size":      float64(3),
-				"distribution":        []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+				"object_count":         2,
+				"hashtable_key_count":  uint64(1),
+				"items_count":          4,
+				"largest_element":      "set:1.large",
+				"largest_element_size": 5,
+				"avg_element_size":     float64(3),
+				"distribution":         []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 			},
 		},
 	}
@@ -67,8 +67,8 @@ func TestRenderSetMarkdown(t *testing.T) {
 	g.Expect(output).To(ContainSubstring("- set-max-listpack-value=64"))
 	g.Expect(output).To(ContainSubstring("- set-max-listpack-entries=128"))
 	g.Expect(output).To(ContainSubstring("- hashtable keys found: 1/2 (50.00% of all set keys)"))
-	g.Expect(output).To(ContainSubstring("- set members count: 4"))
-	g.Expect(output).To(ContainSubstring("- largest set member: set:1.large, size:5"))
+	g.Expect(output).To(ContainSubstring("- set elements count: 4"))
+	g.Expect(output).To(ContainSubstring("- largest set element: set:1.large, size:5"))
 	g.Expect(strings.Count(output, "+ P")).To(Equal(10))
 }
 
@@ -102,13 +102,13 @@ func TestRenderZSetMarkdown(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			zsetDt: map[string]any{
-				"object_count":       2,
-				"skiplist_key_count": uint64(1),
-				"items_count":        4,
-				"largest_field":      "zset:1.large",
-				"largest_field_size": 5,
-				"avg_field_size":     float64(3),
-				"distribution":       []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+				"object_count":         2,
+				"skiplist_key_count":   uint64(1),
+				"items_count":          4,
+				"largest_element":      "zset:1.large",
+				"largest_element_size": 5,
+				"avg_element_size":     float64(3),
+				"distribution":         []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 			},
 		},
 	}
@@ -118,8 +118,8 @@ func TestRenderZSetMarkdown(t *testing.T) {
 	g.Expect(output).To(ContainSubstring("- zset-max-listpack-value=64"))
 	g.Expect(output).To(ContainSubstring("- zset-max-listpack-entries=128"))
 	g.Expect(output).To(ContainSubstring("- skiplist keys found: 1/2 (50.00% of all zset keys)"))
-	g.Expect(output).To(ContainSubstring("- zset members count: 4"))
-	g.Expect(output).To(ContainSubstring("- largest zset member: zset:1.large, size:5"))
+	g.Expect(output).To(ContainSubstring("- zset elements count: 4"))
+	g.Expect(output).To(ContainSubstring("- largest zset element: zset:1.large, size:5"))
 	g.Expect(strings.Count(output, "+ P")).To(Equal(10))
 }
 

@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/valkey-io/valkey-go"
 )
 
 func (v *ValkeyNode) getNodeConfig() error {
@@ -93,4 +95,14 @@ func (v *ValkeyNode) getObjectEncoding(key string) string {
 		return ""
 	}
 	return output
+}
+
+func scan(client valkey.Client, dtype, keyPattern string, cursor uint64) (valkey.ScanEntry, error) {
+	scanCmd := client.B().Scan().Cursor(cursor)
+	if keyPattern != "" {
+		scanCmd.Match(keyPattern)
+	}
+	scanCmd.Type(dtype)
+	resp := client.Do(context.Background(), scanCmd.Build())
+	return resp.AsScanEntry()
 }

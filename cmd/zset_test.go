@@ -106,9 +106,9 @@ func TestAnalyzeZSetMembersUpdatesMemberMetrics(t *testing.T) {
 	g.Expect(v.analyzeZSetMembers("zset:1")).To(Succeed())
 
 	g.Expect(v.ZSetMetrics.memberCount).To(Equal(4))
-	g.Expect(v.ZSetMetrics.maxFieldSize).To(Equal(len(longMember)))
-	g.Expect(v.ZSetMetrics.maxField).To(Equal("zset:1." + longMember))
-	g.Expect(v.ZSetMetrics.avgFieldSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
+	g.Expect(v.ZSetMetrics.maxElementSize).To(Equal(len(longMember)))
+	g.Expect(v.ZSetMetrics.maxElement).To(Equal("zset:1." + longMember))
+	g.Expect(v.ZSetMetrics.avgElementSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
 	g.Expect(v.ZSetMetrics.tdigest.Count()).To(Equal(uint64(4)))
 }
 
@@ -142,9 +142,9 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	v.ZSetMetrics.objCount = 1
 	v.ZSetMetrics.memberCount = 2
 	v.ZSetMetrics.skipListCount = 1
-	v.ZSetMetrics.maxField = "zset:1.large"
-	v.ZSetMetrics.maxFieldSize = 5
-	v.ZSetMetrics.avgFieldSize = 3
+	v.ZSetMetrics.maxElement = "zset:1.large"
+	v.ZSetMetrics.maxElementSize = 5
+	v.ZSetMetrics.avgElementSize = 3
 
 	var analysis Analysis
 	v.getZSetDatatypeAnalysis(&analysis)
@@ -160,9 +160,9 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	g.Expect(zsetMetrics["object_count"]).To(Equal(1))
 	g.Expect(zsetMetrics["items_count"]).To(Equal(2))
 	g.Expect(zsetMetrics["skiplist_key_count"]).To(Equal(uint64(1)))
-	g.Expect(zsetMetrics["largest_field"]).To(Equal("zset:1.large"))
-	g.Expect(zsetMetrics["largest_field_size"]).To(Equal(5))
-	g.Expect(zsetMetrics["avg_field_size"]).To(Equal(float64(3)))
+	g.Expect(zsetMetrics["largest_element"]).To(Equal("zset:1.large"))
+	g.Expect(zsetMetrics["largest_element_size"]).To(Equal(5))
+	g.Expect(zsetMetrics["avg_element_size"]).To(Equal(float64(3)))
 	g.Expect(zsetMetrics["distribution"]).To(HaveLen(10))
 }
 
@@ -171,28 +171,28 @@ func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	cluster := makeZSetMetrics()
 	cluster.objCount = 1
 	cluster.memberCount = 2
-	cluster.avgFieldSize = 2
+	cluster.avgElementSize = 2
 	cluster.skipListCount = 1
-	cluster.maxField = "zset:1.small"
-	cluster.maxFieldSize = 5
+	cluster.maxElement = "zset:1.small"
+	cluster.maxElementSize = 5
 	cluster.tdigest.Add(2)
 
 	node := makeZSetMetrics()
 	node.objCount = 2
 	node.memberCount = 3
-	node.avgFieldSize = 6
+	node.avgElementSize = 6
 	node.skipListCount = 2
-	node.maxField = "zset:2.large"
-	node.maxFieldSize = 12
+	node.maxElement = "zset:2.large"
+	node.maxElementSize = 12
 	node.tdigest.Add(6)
 
 	cluster.updateZSetStatistics(&node)
 
 	g.Expect(cluster.objCount).To(Equal(3))
 	g.Expect(cluster.memberCount).To(Equal(5))
-	g.Expect(cluster.avgFieldSize).To(Equal(4.4))
+	g.Expect(cluster.avgElementSize).To(Equal(4.4))
 	g.Expect(cluster.skipListCount).To(Equal(uint64(3)))
-	g.Expect(cluster.maxField).To(Equal("zset:2.large"))
-	g.Expect(cluster.maxFieldSize).To(Equal(12))
+	g.Expect(cluster.maxElement).To(Equal("zset:2.large"))
+	g.Expect(cluster.maxElementSize).To(Equal(12))
 	g.Expect(cluster.tdigest.Count()).To(Equal(uint64(2)))
 }

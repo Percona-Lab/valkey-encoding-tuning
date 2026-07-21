@@ -19,9 +19,9 @@ type SetMetrics struct {
 	objCount       int
 	memberCount    int
 	hashTableCount uint64
-	maxField       string
-	avgFieldSize   float64
-	maxFieldSize   int
+	maxElement     string
+	avgElementSize float64
+	maxElementSize int
 }
 
 func makeSetMetrics() SetMetrics {
@@ -33,25 +33,9 @@ func makeSetMetrics() SetMetrics {
 }
 
 func (v *ValkeyNode) analyzeSet() error {
-	ctx := context.Background()
-
-	client := v.getClient()
-	err := client.Do(ctx, client.B().Readonly().Build()).Error()
-	if err != nil {
-		panic(err)
-	}
 	var cursor uint64
 	for {
-		scanCmd := client.B().Scan().Cursor(cursor)
-		if *setKeyPattern != "" {
-			scanCmd.Match(*setKeyPattern)
-		}
-		scanCmd.Type(setDt)
-		resp := client.Do(
-			ctx,
-			scanCmd.Build(),
-		)
-		entry, err := resp.AsScanEntry()
+		entry, err := scan(v.getClient(), setDt, *setKeyPattern, cursor)
 		if err != nil {
 			return err
 		}
@@ -97,13 +81,13 @@ func (v *ValkeyNode) analyzeSetMembers(set string) error {
 			v.SetMetrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
 			isHashtable = fSize >= maxLpSize
-			if fSize > v.SetMetrics.maxFieldSize {
-				v.SetMetrics.maxFieldSize = fSize
-				v.SetMetrics.maxField = fmt.Sprintf("%s.%s", set, entry.Elements[i])
+			if fSize > v.SetMetrics.maxElementSize {
+				v.SetMetrics.maxElementSize = fSize
+				v.SetMetrics.maxElement = fmt.Sprintf("%s.%s", set, entry.Elements[i])
 			}
 		}
 		if mCount > 0 {
-			v.SetMetrics.avgFieldSize = float64((fTotalSize + int(float64(v.SetMetrics.memberCount)*v.SetMetrics.avgFieldSize)) / (v.SetMetrics.memberCount + mCount))
+			v.SetMetrics.avgElementSize = float64((fTotalSize + int(float64(v.SetMetrics.memberCount)*v.SetMetrics.avgElementSize)) / (v.SetMetrics.memberCount + mCount))
 			v.SetMetrics.memberCount += mCount
 		}
 		cursor = entry.Cursor
@@ -121,26 +105,26 @@ func (v *ValkeyNode) getSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.init(v.Address)
 	analysis.Config[setMaxListpackValue] = v.Config[setMaxListpackValue]
 	analysis.Config[setMaxListpackEntries] = v.Config[setMaxListpackEntries]
-
+	metrics := v.SetMetrics
 	analysis.Metrics[setDt] = map[string]any{
-		"object_count":        v.SetMetrics.objCount,
-		"hashtable_key_count": v.SetMetrics.hashTableCount,
-		"items_count":         v.SetMetrics.memberCount,
-		"largest_field":       v.SetMetrics.maxField,
-		"largest_field_size":  v.SetMetrics.maxFieldSize,
-		"avg_field_size":      v.SetMetrics.avgFieldSize,
-		"distribution":        quantileDistribution(v.SetMetrics.tdigest),
+		"object_count":         metrics.objCount,
+		"hashtable_key_count":  metrics.hashTableCount,
+		"items_count":          metrics.memberCount,
+		"largest_element":      metrics.maxElement,
+		"largest_element_size": metrics.maxElementSize,
+		"avg_element_size":     metrics.avgElementSize,
+		"distribution":         quantileDistribution(metrics.tdigest),
 	}
 }
 
 func (sm *SetMetrics) updateSetStatistics(node *SetMetrics) {
 	runningTotalField := (sm.memberCount + node.memberCount)
-	runningTotalFieldSize := (float64(sm.memberCount*int(sm.avgFieldSize)) + float64(node.memberCount*int(node.avgFieldSize)))
-	sm.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
+	runningTotalFieldSize := (float64(sm.memberCount*int(sm.avgElementSize)) + float64(node.memberCount*int(node.avgElementSize)))
+	sm.avgElementSize = float64(runningTotalFieldSize / float64(runningTotalField))
 	sm.memberCount = runningTotalField
-	if node.maxFieldSize > sm.maxFieldSize {
-		sm.maxFieldSize = node.maxFieldSize
-		sm.maxField = node.maxField
+	if node.maxElementSize > sm.maxElementSize {
+		sm.maxElementSize = node.maxElementSize
+		sm.maxElement = node.maxElement
 	}
 	sm.hashTableCount += node.hashTableCount
 	sm.objCount += node.objCount

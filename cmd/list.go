@@ -16,6 +16,7 @@ type ListNodeType int
 const (
 	listMaxListpackSize = "list-max-listpack-size"
 	listCompressDepth   = "list-compress-depth"
+	listDt              = "list"
 )
 const (
 	Unknown ListNodeType = iota
@@ -64,44 +65,24 @@ func (v *ValkeyNode) getListNodeDivisionType() {
 }
 
 func (v *ValkeyNode) analyzeList() error {
-	ctx := context.Background()
-	client := v.getClient()
-	err := client.Do(ctx,
-		client.B().Readonly().Build(),
-	).Error()
-	if err != nil {
-		return err
-	}
 	v.getListNodeDivisionType()
 
 	var cursor uint64
 	for {
-		scanCmd := client.B().Scan().Cursor(cursor)
-		if *listKeyPattern != "" {
-			scanCmd.Match(*listKeyPattern)
-		}
-		scanCmd.Type("list")
-		resp := client.Do(
-			ctx,
-			scanCmd.Build(),
-		)
-		entry, err := resp.AsScanEntry()
+		entry, err := scan(v.getClient(), listDt, *listKeyPattern, cursor)
 		if err != nil {
 			return err
 		}
-
 		for _, key := range entry.Elements {
 			err := v.analyzeListKey(key)
 			if err != nil {
 				panic(err)
 			}
 		}
-
 		cursor = entry.Cursor
 		if cursor == 0 {
 			break
 		}
-
 	}
 
 	return nil
@@ -198,7 +179,7 @@ func (v *ValkeyNode) getListDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[listMaxListpackSize] = v.Config[listMaxListpackSize]
 	analysis.Config[listCompressDepth] = v.Config[listCompressDepth]
 
-	analysis.Metrics["list"] = map[string]any{
+	analysis.Metrics[listDt] = map[string]any{
 		"object_count":                 lm.objCount,
 		"estimated_largest_node_count": lm.maxNodeCount,
 		"estimated_avg_node_count":     lm.avgNodeCount,
