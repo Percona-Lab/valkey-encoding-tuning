@@ -16,9 +16,9 @@ const (
 
 type ZSetMetrics struct {
 	tdigest        *tdigest.TDigest
-	objCount       int
-	elementCount   int
-	skipListCount  uint64
+	objCnt         int
+	elementCnt     int
+	skipListCnt    uint64
 	maxElement     string
 	avgElementSize float64
 	maxElementSize int
@@ -34,12 +34,12 @@ func makeZSetMetrics() ZSetMetrics {
 
 func (v *ValkeyNode) analyzeZSet() error {
 	var cursor uint64
-	for {
+	for ok := true; ok; ok = (cursor != 0) {
 		entry, err := scan(v.getClient(), zsetDt, *zsetKeyPattern, cursor)
 		if err != nil {
 			return err
 		}
-		v.ZSetMetrics.objCount += len(entry.Elements)
+		v.ZSetMetrics.objCnt += len(entry.Elements)
 		for _, key := range entry.Elements {
 			err = v.analyzeZSetMembers(key)
 			if err != nil {
@@ -47,9 +47,6 @@ func (v *ValkeyNode) analyzeZSet() error {
 			}
 		}
 		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
 	}
 	return nil
 
@@ -65,7 +62,7 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 	if err != nil {
 		return err
 	}
-	for {
+	for ok := true; ok; ok = (cursor != 0) {
 		resp := client.Do(
 			ctx,
 			client.B().Zscan().Key(zset).Cursor(cursor).Noscores().Build(),
@@ -74,10 +71,10 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 		if err != nil {
 			return err
 		}
-		mCount := 0
+		eleCnt := 0
 		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i++ {
-			mCount++
+			eleCnt++
 			fSize := len(entry.Elements[i])
 			metrics.tdigest.Add(float64(fSize))
 			fTotalSize += fSize
@@ -87,17 +84,14 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 				metrics.maxElement = fmt.Sprintf("%s.%s", zset, entry.Elements[i])
 			}
 		}
-		if mCount > 0 {
-			metrics.avgElementSize = float64((fTotalSize + int(float64(metrics.elementCount)*metrics.avgElementSize)) / (metrics.elementCount + mCount))
-			metrics.elementCount += mCount
+		if eleCnt > 0 {
+			metrics.avgElementSize = float64((fTotalSize + int(float64(metrics.elementCnt)*metrics.avgElementSize)) / (metrics.elementCnt + eleCnt))
+			metrics.elementCnt += eleCnt
 		}
 		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
 	}
 	if isHashtable {
-		metrics.skipListCount++
+		metrics.skipListCnt++
 	}
 	return nil
 }
@@ -108,9 +102,9 @@ func (v *ValkeyNode) getZSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[zsetMaxListpackEntries] = v.Config[zsetMaxListpackEntries]
 	metrics := v.ZSetMetrics
 	analysis.Metrics[zsetDt] = map[string]any{
-		kObjCount:       metrics.objCount,
-		kSlKeyCount:     metrics.skipListCount,
-		kElementsCount:  metrics.elementCount,
+		kObjCnt:         metrics.objCnt,
+		kSlKeyCnt:       metrics.skipListCnt,
+		kElementsCnt:    metrics.elementCnt,
 		kMaxElement:     metrics.maxElement,
 		kMaxElementSize: metrics.maxElementSize,
 		kAvgElementSize: metrics.avgElementSize,
@@ -119,15 +113,15 @@ func (v *ValkeyNode) getZSetDatatypeAnalysis(analysis *Analysis) {
 }
 
 func (zm *ZSetMetrics) updateZSetStatistics(node *ZSetMetrics) {
-	runningTotalField := (zm.elementCount + node.elementCount)
-	runningTotalFieldSize := (float64(zm.elementCount*int(zm.avgElementSize)) + float64(node.elementCount*int(node.avgElementSize)))
+	runningTotalField := (zm.elementCnt + node.elementCnt)
+	runningTotalFieldSize := (float64(zm.elementCnt*int(zm.avgElementSize)) + float64(node.elementCnt*int(node.avgElementSize)))
 	zm.avgElementSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	zm.elementCount = runningTotalField
+	zm.elementCnt = runningTotalField
 	if node.maxElementSize > zm.maxElementSize {
 		zm.maxElementSize = node.maxElementSize
 		zm.maxElement = node.maxElement
 	}
-	zm.skipListCount += node.skipListCount
-	zm.objCount += node.objCount
+	zm.skipListCnt += node.skipListCnt
+	zm.objCnt += node.objCnt
 	zm.tdigest.Merge(node.tdigest)
 }

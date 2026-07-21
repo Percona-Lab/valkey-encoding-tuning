@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -105,4 +106,11 @@ func scan(client valkey.Client, dtype, keyPattern string, cursor uint64) (valkey
 	scanCmd.Type(dtype)
 	resp := client.Do(context.Background(), scanCmd.Build())
 	return resp.AsScanEntry()
+}
+
+func max[T cmp.Ordered](x, y T) T {
+	if x > y {
+		return x
+	}
+	return y
 }

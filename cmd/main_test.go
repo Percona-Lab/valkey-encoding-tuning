@@ -164,7 +164,7 @@ func TestAnalyzeCluster(t *testing.T) {
 		parseArguments()
 
 		cs := analyzeCluster(makeValkeyNode(address))
-		g.Expect(cs.HashMetrics.objCount).To(Equal(hashKeysCount))
+		g.Expect(cs.HashMetrics.objCnt).To(Equal(hashKeysCount))
 
 	})
 	t.Cleanup(func() {

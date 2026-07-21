@@ -31,13 +31,13 @@ type ListMetrics struct {
 	// for element count distribution, affecting the number of nodes if `list-max-listpack-size` is positive number
 	nodeDivisionType ListNodeType
 	tdigest          *tdigest.TDigest
-	objCount         int64
-	avgNodeCount     int64
-	maxNodeCount     int64
+	objCnt           int64
+	avgNodeCnt       int64
+	maxNodeCnt       int64
 	avgObjSize       int64
 	maxObjSize       int64
-	avgElementCount  int64
-	maxElementCount  int64
+	avgElementCnt    int64
+	maxElementCnt    int64
 }
 
 var optimizationLevel = map[string]int{
@@ -68,7 +68,7 @@ func (v *ValkeyNode) analyzeList() error {
 	v.getListNodeDivisionType()
 
 	var cursor uint64
-	for {
+	for ok := true; ok; ok = (cursor != 0) {
 		entry, err := scan(v.getClient(), listDt, *listKeyPattern, cursor)
 		if err != nil {
 			return err
@@ -80,18 +80,14 @@ func (v *ValkeyNode) analyzeList() error {
 			}
 		}
 		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
 	}
-
 	return nil
 }
 
 func (v *ValkeyNode) analyzeListKey(key string) error {
 	lm := &v.ListMetrics
-	oldCount := lm.objCount
-	lm.objCount++
+	oldCount := lm.objCnt
+	lm.objCnt++
 
 	ctx := context.Background()
 	client := v.getClient()
@@ -126,20 +122,14 @@ func (v *ValkeyNode) analyzeListKey(key string) error {
 	} else {
 		lm.tdigest.Add(float64(count))
 	}
-	if lm.maxNodeCount < nodeCount {
-		lm.maxNodeCount = nodeCount
-	}
-	lm.avgNodeCount = (nodeCount + (lm.avgNodeCount * oldCount)) / lm.objCount
+	lm.maxNodeCnt = max(lm.maxNodeCnt, nodeCount)
+	lm.avgNodeCnt = (nodeCount + (lm.avgNodeCnt * oldCount)) / lm.objCnt
 
-	if lm.maxObjSize < ksize {
-		lm.maxObjSize = ksize
-	}
-	lm.avgObjSize = (ksize + lm.avgObjSize*oldCount) / lm.objCount
+	lm.maxObjSize = max(lm.maxObjSize, ksize)
+	lm.avgObjSize = (ksize + lm.avgObjSize*oldCount) / lm.objCnt
 
-	if lm.maxElementCount < count {
-		lm.maxElementCount = count
-	}
-	lm.avgElementCount = (count + lm.avgElementCount*oldCount) / lm.objCount
+	lm.maxElementCnt = max(lm.maxElementCnt, count)
+	lm.avgElementCnt = (count + lm.avgElementCnt*oldCount) / lm.objCnt
 
 	return nil
 }
@@ -180,13 +170,13 @@ func (v *ValkeyNode) getListDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[listCompressDepth] = v.Config[listCompressDepth]
 
 	analysis.Metrics[listDt] = map[string]any{
-		kObjCount:        lm.objCount,
-		kMaxNodeCount:    lm.maxNodeCount,
-		kAvgNodeCount:    lm.avgNodeCount,
-		kMaxElementCount: lm.maxElementCount,
-		kAvgElementCount: lm.avgElementCount,
-		kSizeDistrType:   sizeDistrType,
-		kDistribution:    quantileDistribution(lm.tdigest),
+		kObjCnt:        lm.objCnt,
+		kMaxNodeCnt:    lm.maxNodeCnt,
+		kAvgNodeCnt:    lm.avgNodeCnt,
+		kMaxElementCnt: lm.maxElementCnt,
+		kAvgElementCnt: lm.avgElementCnt,
+		kSizeDistrType: sizeDistrType,
+		kDistribution:  quantileDistribution(lm.tdigest),
 	}
 }
 func (lm *ListMetrics) updateListStatistics(node *ListMetrics) {
@@ -199,19 +189,15 @@ func (lm *ListMetrics) updateListStatistics(node *ListMetrics) {
 		// init value
 		lm.nodeDivisionType = node.nodeDivisionType
 	}
-	objCount := (lm.objCount + node.objCount)
+	objCount := (lm.objCnt + node.objCnt)
 	if objCount == 0 {
 		return
 	}
-	lm.avgObjSize = (lm.avgObjSize*lm.objCount + node.avgObjSize*lm.objCount) / objCount
-	lm.avgElementCount = (lm.avgElementCount*lm.objCount + node.avgElementCount*node.objCount) / objCount
-	lm.objCount = objCount
-	if lm.maxNodeCount < node.maxNodeCount {
-		lm.maxNodeCount = node.maxNodeCount
-	}
-	if lm.maxElementCount < node.maxElementCount {
-		lm.maxElementCount = node.maxElementCount
-	}
+	lm.avgObjSize = (lm.avgObjSize*lm.objCnt + node.avgObjSize*lm.objCnt) / objCount
+	lm.avgElementCnt = (lm.avgElementCnt*lm.objCnt + node.avgElementCnt*node.objCnt) / objCount
+	lm.objCnt = objCount
+	lm.maxNodeCnt = max(lm.maxNodeCnt, node.maxNodeCnt)
+	lm.maxElementCnt = max(lm.maxElementCnt, node.maxElementCnt)
 	lm.tdigest.Merge(node.tdigest)
 
 }

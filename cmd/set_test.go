@@ -63,7 +63,7 @@ func TestAnalyzeSetScansOnlySetKeys(t *testing.T) {
 	g.Expect(err).To(BeNil())
 
 	g.Expect(v.analyzeSet()).To(Succeed())
-	g.Expect(v.SetMetrics.objCount).To(Equal(2))
+	g.Expect(v.SetMetrics.objCnt).To(Equal(2))
 }
 
 func TestAnalyzeSetWithKeyFilterMatchedPattern(t *testing.T) {
@@ -77,7 +77,7 @@ func TestAnalyzeSetWithKeyFilterMatchedPattern(t *testing.T) {
 	saddTestSet(t, client, "set:other:1", "d")
 
 	g.Expect(v.analyzeSet()).To(Succeed())
-	g.Expect(v.SetMetrics.objCount).To(Equal(2))
+	g.Expect(v.SetMetrics.objCnt).To(Equal(2))
 }
 
 func TestAnalyzeSetWithKeyFilterNotMatchingPattern(t *testing.T) {
@@ -90,7 +90,7 @@ func TestAnalyzeSetWithKeyFilterNotMatchingPattern(t *testing.T) {
 	saddTestSet(t, client, "set:2", "b")
 
 	g.Expect(v.analyzeSet()).To(Succeed())
-	g.Expect(v.SetMetrics.objCount).To(Equal(0))
+	g.Expect(v.SetMetrics.objCnt).To(Equal(0))
 }
 
 func TestAnalyzeSetMembersUpdatesMemberMetrics(t *testing.T) {
@@ -104,7 +104,7 @@ func TestAnalyzeSetMembersUpdatesMemberMetrics(t *testing.T) {
 
 	g.Expect(v.analyzeSetMembers("set:1")).To(Succeed())
 
-	g.Expect(v.SetMetrics.elementCount).To(Equal(4), "expect SetMetrics.memberCount to be %d, got %d", 4, v.SetMetrics.elementCount)
+	g.Expect(v.SetMetrics.elementCnt).To(Equal(4), "expect SetMetrics.memberCount to be %d, got %d", 4, v.SetMetrics.elementCnt)
 	g.Expect(v.SetMetrics.maxElementSize).To(Equal(len(longMember)))
 	g.Expect(v.SetMetrics.maxElement).To(Equal("set:1." + longMember))
 	g.Expect(v.SetMetrics.avgElementSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
@@ -129,7 +129,7 @@ func TestAnalyzeSetMembersCountsHashtableCandidates(t *testing.T) {
 
 	g.Expect(v.analyzeSetMembers("set:1")).To(Succeed())
 
-	g.Expect(v.SetMetrics.hashTableCount).To(Equal(uint64(1)))
+	g.Expect(v.SetMetrics.htCnt).To(Equal(uint64(1)))
 }
 
 func TestAnalyzeSetMembersReturnsErrorForInvalidSetMaxListpackValue(t *testing.T) {
@@ -149,9 +149,9 @@ func TestGetSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 		setMaxListpackValue:   "64",
 		setMaxListpackEntries: "128",
 	}
-	v.SetMetrics.objCount = 1
-	v.SetMetrics.elementCount = 2
-	v.SetMetrics.hashTableCount = 1
+	v.SetMetrics.objCnt = 1
+	v.SetMetrics.elementCnt = 2
+	v.SetMetrics.htCnt = 1
 	v.SetMetrics.maxElement = "set:1.large"
 	v.SetMetrics.maxElementSize = 5
 	v.SetMetrics.avgElementSize = 3
@@ -163,9 +163,9 @@ func TestGetSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	g.Expect(analysis.Config[setMaxListpackValue]).To(Equal("64"))
 	g.Expect(analysis.Config[setMaxListpackEntries]).To(Equal("128"))
 	setMetrics := analysis.Metrics[setDt].(map[string]any)
-	g.Expect(setMetrics[kObjCount]).To(Equal(1))
-	g.Expect(setMetrics[kElementsCount]).To(Equal(2))
-	g.Expect(setMetrics[kHtKeyCount]).To(Equal(uint64(1)))
+	g.Expect(setMetrics[kObjCnt]).To(Equal(1))
+	g.Expect(setMetrics[kElementsCnt]).To(Equal(2))
+	g.Expect(setMetrics[kHtKeyCnt]).To(Equal(uint64(1)))
 	g.Expect(setMetrics[kMaxElement]).To(Equal("set:1.large"))
 	g.Expect(setMetrics[kMaxElementSize]).To(Equal(5))
 	g.Expect(setMetrics[kAvgElementSize]).To(Equal(float64(3)))
@@ -175,29 +175,29 @@ func TestGetSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 func TestUpdateSetStatisticsMergesNodeMetrics(t *testing.T) {
 	g := NewWithT(t)
 	cluster := makeSetMetrics()
-	cluster.objCount = 1
-	cluster.elementCount = 2
+	cluster.objCnt = 1
+	cluster.elementCnt = 2
 	cluster.avgElementSize = 2
-	cluster.hashTableCount = 1
+	cluster.htCnt = 1
 	cluster.maxElement = "set:1.small"
 	cluster.maxElementSize = 5
 	cluster.tdigest.Add(2)
 
 	node := makeSetMetrics()
-	node.objCount = 2
-	node.elementCount = 3
+	node.objCnt = 2
+	node.elementCnt = 3
 	node.avgElementSize = 6
-	node.hashTableCount = 2
+	node.htCnt = 2
 	node.maxElement = "set:2.large"
 	node.maxElementSize = 12
 	node.tdigest.Add(6)
 
 	cluster.updateSetStatistics(&node)
 
-	g.Expect(cluster.objCount).To(Equal(3))
-	g.Expect(cluster.elementCount).To(Equal(5))
+	g.Expect(cluster.objCnt).To(Equal(3))
+	g.Expect(cluster.elementCnt).To(Equal(5))
 	g.Expect(cluster.avgElementSize).To(Equal(4.4))
-	g.Expect(cluster.hashTableCount).To(Equal(uint64(3)))
+	g.Expect(cluster.htCnt).To(Equal(uint64(3)))
 	g.Expect(cluster.maxElement).To(Equal("set:2.large"))
 	g.Expect(cluster.maxElementSize).To(Equal(12))
 	g.Expect(cluster.tdigest.Count()).To(Equal(uint64(2)))

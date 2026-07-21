@@ -14,13 +14,14 @@ const (
 )
 
 type HashMetrics struct {
-	tdigest        *tdigest.TDigest
-	objCount       int
-	fieldCount     int
-	hashTableCount uint64
-	maxField       string
-	avgFieldSize   float64
-	maxFieldSize   int
+	tdigest  *tdigest.TDigest
+	objCnt   int
+	fieldCnt int
+	// number of keys encoded as hashtables
+	htCnt        uint64
+	maxField     string
+	avgFieldSize float64
+	maxFieldSize int
 }
 
 func makeHashMetrics() HashMetrics {
@@ -33,12 +34,12 @@ func makeHashMetrics() HashMetrics {
 
 func (v *ValkeyNode) analyzeHash() error {
 	var cursor uint64
-	for {
+	for ok := true; ok; ok = (cursor != 0) {
 		entry, err := scan(v.getClient(), hashDt, *hashKeyPattern, cursor)
 		if err != nil {
 			return err
 		}
-		v.HashMetrics.objCount += len(entry.Elements)
+		v.HashMetrics.objCnt += len(entry.Elements)
 		for _, key := range entry.Elements {
 			err = v.analyzeHashField(key)
 			if err != nil {
@@ -46,12 +47,8 @@ func (v *ValkeyNode) analyzeHash() error {
 			}
 		}
 		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
 	}
 	return nil
-
 }
 
 func (v *ValkeyNode) analyzeHashField(hash string) error {
@@ -63,7 +60,7 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 	if err != nil {
 		return err
 	}
-	for {
+	for ok := true; ok; ok = (cursor != 0) {
 		resp := client.Do(
 			ctx,
 			client.B().Hscan().Key(hash).Cursor(cursor).Build(),
@@ -95,16 +92,13 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			}
 		}
 		if fCount > 0 {
-			v.HashMetrics.avgFieldSize = float64((fTotalSize + int(float64(v.HashMetrics.fieldCount)*v.HashMetrics.avgFieldSize)) / (v.HashMetrics.fieldCount + fCount))
-			v.HashMetrics.fieldCount += fCount
+			v.HashMetrics.avgFieldSize = float64((fTotalSize + int(float64(v.HashMetrics.fieldCnt)*v.HashMetrics.avgFieldSize)) / (v.HashMetrics.fieldCnt + fCount))
+			v.HashMetrics.fieldCnt += fCount
 		}
 		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
 	}
 	if isHashtable {
-		v.HashMetrics.hashTableCount++
+		v.HashMetrics.htCnt++
 	}
 
 	return nil
@@ -115,9 +109,9 @@ func (v *ValkeyNode) getHashDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[hashMaxListpack] = v.Config[hashMaxListpack]
 
 	analysis.Metrics[hashDt] = map[string]any{
-		kObjCount:     v.HashMetrics.objCount,
-		kHtKeyCount:   v.HashMetrics.hashTableCount,
-		kFieldCount:   v.HashMetrics.fieldCount,
+		kObjCnt:       v.HashMetrics.objCnt,
+		kHtKeyCnt:     v.HashMetrics.htCnt,
+		kFieldCnt:     v.HashMetrics.fieldCnt,
 		kMaxField:     v.HashMetrics.maxField,
 		kMaxFieldSize: v.HashMetrics.maxFieldSize,
 		kAvgFieldSize: v.HashMetrics.avgFieldSize,
@@ -126,15 +120,15 @@ func (v *ValkeyNode) getHashDatatypeAnalysis(analysis *Analysis) {
 }
 
 func (hm *HashMetrics) updateHashStatistics(node *HashMetrics) {
-	runningTotalField := (hm.fieldCount + node.fieldCount)
-	runningTotalFieldSize := (float64(hm.fieldCount*int(hm.avgFieldSize)) + float64(node.fieldCount*int(node.avgFieldSize)))
+	runningTotalField := (hm.fieldCnt + node.fieldCnt)
+	runningTotalFieldSize := (float64(hm.fieldCnt*int(hm.avgFieldSize)) + float64(node.fieldCnt*int(node.avgFieldSize)))
 	hm.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	hm.fieldCount = runningTotalField
+	hm.fieldCnt = runningTotalField
 	if node.maxFieldSize > hm.maxFieldSize {
 		hm.maxFieldSize = node.maxFieldSize
 		hm.maxField = node.maxField
 	}
-	hm.hashTableCount += node.hashTableCount
-	hm.objCount += node.objCount
+	hm.htCnt += node.htCnt
+	hm.objCnt += node.objCnt
 	hm.tdigest.Merge(node.tdigest)
 }

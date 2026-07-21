@@ -21,7 +21,7 @@ func TestWriteJsonWritesIndentedAnalysisOutput(t *testing.T) {
 				Config:  map[string]string{hashMaxListpack: "64"},
 				Metrics: map[string]any{
 					"hash": map[string]any{
-						kObjCount:     1,
+						kObjCnt:       1,
 						kDistribution: []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 					},
 				},
@@ -51,9 +51,9 @@ func TestRenderSetMarkdown(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			setDt: map[string]any{
-				kObjCount:       2,
-				kHtKeyCount:     uint64(1),
-				kElementsCount:  4,
+				kObjCnt:         2,
+				kHtKeyCnt:       uint64(1),
+				kElementsCnt:    4,
 				kMaxElement:     "set:1.large",
 				kMaxElementSize: 5,
 				kAvgElementSize: float64(3),
@@ -82,7 +82,7 @@ func TestRenderSetMarkdownWithNoKeys(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			setDt: map[string]any{
-				kObjCount: 0,
+				kObjCnt: 0,
 			},
 		},
 	}
@@ -102,9 +102,9 @@ func TestRenderZSetMarkdown(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			zsetDt: map[string]any{
-				kObjCount:       2,
-				kSlKeyCount:     uint64(1),
-				kElementsCount:  4,
+				kObjCnt:         2,
+				kSlKeyCnt:       uint64(1),
+				kElementsCnt:    4,
 				kMaxElement:     "zset:1.large",
 				kMaxElementSize: 5,
 				kAvgElementSize: float64(3),
@@ -133,7 +133,7 @@ func TestRenderZSetMarkdownWithNoKeys(t *testing.T) {
 		},
 		Metrics: map[string]any{
 			zsetDt: map[string]any{
-				kObjCount: 0,
+				kObjCnt: 0,
 			},
 		},
 	}
