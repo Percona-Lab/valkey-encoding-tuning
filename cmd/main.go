@@ -20,6 +20,8 @@ var (
 	bootstrapPassword *string
 	hashKeyPattern    *string
 	listKeyPattern    *string
+	setKeyPattern     *string
+	zsetKeyPattern    *string
 	fieldPattern      *string
 	fieldPatternRE    *regexp.Regexp
 	printOutput       *bool
@@ -33,6 +35,8 @@ type ValkeyNode struct {
 	Config      map[string]string
 	HashMetrics HashMetrics
 	ListMetrics ListMetrics
+	SetMetrics  SetMetrics
+	ZSetMetrics ZSetMetrics
 }
 
 func (v *ValkeyNode) getClient() valkey.Client {
@@ -78,6 +82,8 @@ func makeValkeyNode(address string) ValkeyNode {
 		Address:     address,
 		HashMetrics: makeHashMetrics(),
 		ListMetrics: makeListMetrics(),
+		SetMetrics:  makeSetMetrics(),
+		ZSetMetrics: makeZSetMetrics(),
 	}
 }
 
@@ -125,13 +131,24 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 
 		v.analyzeList()
 		v.getListDatatypeAnalysis(&analysis)
-		analyses = append(analyses, analysis)
 		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
+
+		v.analyzeSet()
+		v.getSetDatatypeAnalysis(&analysis)
+		cs.SetMetrics.updateSetStatistics(&v.SetMetrics)
+
+		v.analyzeZSet()
+		v.getZSetDatatypeAnalysis(&analysis)
+		cs.ZSetMetrics.updateZSetStatistics(&v.ZSetMetrics)
+
+		analyses = append(analyses, analysis)
 	}
 	var clusterAnalysis Analysis
 	if isCluster {
 		cs.getHashDatatypeAnalysis(&clusterAnalysis)
 		cs.getListDatatypeAnalysis(&clusterAnalysis)
+		cs.getSetDatatypeAnalysis(&clusterAnalysis)
+		cs.getZSetDatatypeAnalysis(&clusterAnalysis)
 	}
 
 	if *printOutput {
@@ -150,6 +167,22 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		}
 		if isCluster {
 			fmt.Println(clusterAnalysis.renderListMarkdown())
+		}
+
+		fmt.Println("# Set Datatype Analysis")
+		for _, analysis := range analyses {
+			fmt.Println(analysis.renderSetMarkdown())
+		}
+		if isCluster {
+			fmt.Println(clusterAnalysis.renderSetMarkdown())
+		}
+
+		fmt.Println("# Sorted Set Datatype Analysis")
+		for _, analysis := range analyses {
+			fmt.Println(analysis.renderZSetMarkdown())
+		}
+		if isCluster {
+			fmt.Println(clusterAnalysis.renderZSetMarkdown())
 		}
 	}
 	if *outFile != "" {
@@ -173,8 +206,10 @@ func initFlags() {
 	bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
 	bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
 	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
-	hashKeyPattern = flag.String("hash-key-pattern", "", "Pattern (glob style) of the hash keys to be analyzed")
-	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the list keys to be analyzed")
+	hashKeyPattern = flag.String("hash-key-pattern", "", "Pattern (glob style) of the HASH keys to be analyzed")
+	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the LIST keys to be analyzed")
+	setKeyPattern = flag.String("set-key-pattern", "", "Pattern (glob style) of the SET keys to be analyzed")
+	zsetKeyPattern = flag.String("zset-key-pattern", "", "Pattern (glob style) of the SORTED SET keys to be analyzed")
 	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
 	printOutput = flag.Bool("print-output", true, "Print output to stdout")
 	outFile = flag.String("output-file", "", "Output file name")

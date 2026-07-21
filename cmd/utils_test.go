@@ -35,4 +35,8 @@ func TestGetServerInfo(t *testing.T) {
 		g.Expect(err).To(BeNil())
 		g.Expect((uptime)).Should(BeNumerically(">", 0))
 	})
+	t.Cleanup(func() {
+		cleanupValkeyInstance(address, client)
+	})
+
 }
