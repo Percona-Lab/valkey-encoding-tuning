@@ -175,9 +175,10 @@ func TestScanCluster(t *testing.T) {
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		nodes := getClusterNodes(ValkeyNode{
+		nodes, err := getClusterNodes(ValkeyNode{
 			Address: address,
 		})
+		g.Expect(err).To(BeNil())
 		dbSizeKeys := 0
 		for _, n := range nodes {
 			nClient := createClient(n.Address)

@@ -33,7 +33,7 @@ func (v *ValkeyNode) analyzeZSet() error {
 		for _, key := range entry.Elements {
 			err = v.analyzeZSetMembers(key)
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("analyze zset key %q: %w", key, err)
 			}
 		}
 		cursor = entry.Cursor

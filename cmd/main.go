@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -104,7 +105,7 @@ func makeValkeyNode(address string) ValkeyNode {
 	}
 }
 
-func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
+func getClusterNodes(bootstrapNode ValkeyNode) ([]ValkeyNode, error) {
 	var nodes []ValkeyNode
 
 	ctx := context.Background()
@@ -114,7 +115,7 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
 	if err != nil {
 		if err.Error() != errNotClusterMode {
-			panic(err)
+			return nil, err
 		}
 		nodes = append(nodes, bootstrapNode)
 	} else {
@@ -132,32 +133,32 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 			nodes = append(nodes, node)
 		}
 	}
-	return nodes
+	return nodes, nil
 }
-func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
-	nodes := getClusterNodes(bootstrapNode)
+
+type clusterAnalysisResult struct {
+	Summary   ValkeyNode
+	Output    AnalysisOutput
+	IsCluster bool
+}
+
+func analyzeClusterData(bootstrapNode ValkeyNode) (clusterAnalysisResult, error) {
+	nodes, err := getClusterNodes(bootstrapNode)
+	if err != nil {
+		return clusterAnalysisResult{}, err
+	}
 	isCluster := len(nodes) > 1
 	analyses := make([]Analysis, 0)
 
 	cs := makeValkeyNode("")
 	for _, v := range nodes {
-		v.getNodeConfig()
-
-		var analysis Analysis
-		v.analyzeHash()
-		v.getHashDatatypeAnalysis(&analysis)
+		analysis, err := analyzeNode(&v)
+		if err != nil {
+			return clusterAnalysisResult{}, err
+		}
 		cs.HashMetrics.updateHashStatistics(&v.HashMetrics)
-
-		v.analyzeList()
-		v.getListDatatypeAnalysis(&analysis)
 		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
-
-		v.analyzeSet()
-		v.getSetDatatypeAnalysis(&analysis)
 		cs.SetMetrics.updateSetStatistics(&v.SetMetrics)
-
-		v.analyzeZSet()
-		v.getZSetDatatypeAnalysis(&analysis)
 		cs.ZSetMetrics.updateZSetStatistics(&v.ZSetMetrics)
 
 		analyses = append(analyses, analysis)
@@ -170,53 +171,107 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		cs.getZSetDatatypeAnalysis(&clusterAnalysis)
 	}
 
+	return clusterAnalysisResult{
+		Summary: cs,
+		Output: AnalysisOutput{
+			Nodes:   analyses,
+			Cluster: &clusterAnalysis,
+		},
+		IsCluster: isCluster,
+	}, nil
+}
+
+func analyzeNode(v *ValkeyNode) (Analysis, error) {
+	if err := v.getNodeConfig(); err != nil {
+		return Analysis{}, fmt.Errorf("get config for node %s: %w", v.Address, err)
+	}
+
+	var analysis Analysis
+	if err := v.analyzeHash(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze hash keys on node %s: %w", v.Address, err)
+	}
+	v.getHashDatatypeAnalysis(&analysis)
+
+	if err := v.analyzeList(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze list keys on node %s: %w", v.Address, err)
+	}
+	v.getListDatatypeAnalysis(&analysis)
+
+	if err := v.analyzeSet(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze set keys on node %s: %w", v.Address, err)
+	}
+	v.getSetDatatypeAnalysis(&analysis)
+
+	if err := v.analyzeZSet(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze zset keys on node %s: %w", v.Address, err)
+	}
+	v.getZSetDatatypeAnalysis(&analysis)
+
+	return analysis, nil
+}
+
+func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
+	fmt.Println("# Hash Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderHashMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderHashMarkdown())
+	}
+
+	fmt.Println("# List Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderListMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderListMarkdown())
+	}
+
+	fmt.Println("# Set Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderSetMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderSetMarkdown())
+	}
+
+	fmt.Println("# Sorted Set Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderZSetMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderZSetMarkdown())
+	}
+}
+
+func writeClusterAnalysis(opts *Options, output AnalysisOutput) error {
+	if opts.OutputFile == "" {
+		return nil
+	}
+	return writeJson(opts.OutputFile, output)
+}
+
+func runClusterAnalysis(bootstrapNode ValkeyNode) (ValkeyNode, error) {
+	result, err := analyzeClusterData(bootstrapNode)
+	if err != nil {
+		return ValkeyNode{}, err
+	}
 	bootstrapOptions := bootstrapNode.opts()
 	if bootstrapOptions.PrintOutput {
-
-		fmt.Println("# Hash Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderHashMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderHashMarkdown())
-		}
-
-		fmt.Println("# List Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderListMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderListMarkdown())
-		}
-
-		fmt.Println("# Set Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderSetMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderSetMarkdown())
-		}
-
-		fmt.Println("# Sorted Set Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderZSetMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderZSetMarkdown())
-		}
+		renderClusterAnalysis(result.Output, result.IsCluster)
 	}
-	if bootstrapOptions.OutputFile != "" {
-		err := writeJson(bootstrapOptions.OutputFile,
-			map[string]any{
-				"nodes":   analyses,
-				"cluster": clusterAnalysis,
-			},
-		)
-		if err != nil {
-			panic(err)
-		}
+	if err := writeClusterAnalysis(bootstrapOptions, result.Output); err != nil {
+		return ValkeyNode{}, err
 	}
-	return cs
+	return result.Summary, nil
+}
+
+func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
+	summary, err := runClusterAnalysis(bootstrapNode)
+	if err != nil {
+		panic(err)
+	}
+	return summary
 }
 
 func defaultOptions() Options {
@@ -243,6 +298,7 @@ func initFlags() {
 	flag.StringVar(&options.OutputFile, "output-file", "", "Output file name")
 	flagsInitialized = flag.CommandLine
 }
+
 func parseArguments() {
 	if options.FieldPattern != "" {
 		options.FieldPatternRE = regexp.MustCompile(options.FieldPattern)
@@ -256,5 +312,8 @@ func main() {
 	flag.Parse()
 	parseArguments()
 	v := makeValkeyNode(options.Address)
-	analyzeCluster(v)
+	if _, err := runClusterAnalysis(v); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

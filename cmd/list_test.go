@@ -231,6 +231,60 @@ func TestAnalyzeListKeyReturnsErrorForInvalidPositiveListMaxListpackSize(t *test
 	g.Expect(v.analyzeListKey("list:1")).To(HaveOccurred())
 }
 
+func TestAnalyzeListKeyReturnsErrorForUnsupportedNegativeListMaxListpackSize(t *testing.T) {
+	g := NewWithT(t)
+	v, client := setupListTestNode(t)
+	v.Config[listMaxListpackSize] = "-6"
+	rpushTestList(t, client, "list:1", "a")
+
+	g.Expect(v.analyzeListKey("list:1")).To(HaveOccurred())
+	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(0)))
+}
+
+func TestEstimateListNodeCountReturnsErrorForZeroLimit(t *testing.T) {
+	g := NewWithT(t)
+
+	_, err := estimateListNodeCount("0", 1, 1)
+
+	g.Expect(err).To(HaveOccurred())
+}
+
+func TestUpdateListStatisticsMergesWeightedAverages(t *testing.T) {
+	g := NewWithT(t)
+	cluster := makeListMetrics()
+	cluster.nodeDivisionType = BySize
+	cluster.objCnt = 2
+	cluster.avgNodeCnt = 3
+	cluster.avgObjSize = 10
+	cluster.avgElementCnt = 4
+	cluster.maxNodeCnt = 5
+	cluster.maxObjSize = 20
+	cluster.maxElementCnt = 6
+	cluster.tdigest.Add(10)
+
+	node := makeListMetrics()
+	node.nodeDivisionType = BySize
+	node.objCnt = 3
+	node.avgNodeCnt = 8
+	node.avgObjSize = 30
+	node.avgElementCnt = 9
+	node.maxNodeCnt = 12
+	node.maxObjSize = 40
+	node.maxElementCnt = 15
+	node.tdigest.Add(30)
+
+	cluster.updateListStatistics(&node)
+
+	g.Expect(cluster.objCnt).To(Equal(int64(5)))
+	g.Expect(cluster.avgNodeCnt).To(Equal(int64(6)))
+	g.Expect(cluster.avgObjSize).To(Equal(int64(22)))
+	g.Expect(cluster.avgElementCnt).To(Equal(int64(7)))
+	g.Expect(cluster.maxNodeCnt).To(Equal(int64(12)))
+	g.Expect(cluster.maxObjSize).To(Equal(int64(40)))
+	g.Expect(cluster.maxElementCnt).To(Equal(int64(15)))
+	g.Expect(cluster.tdigest.Count()).To(Equal(uint64(2)))
+}
+
 func TestGetListDatatypeAnalysisPopulatesStructWithoutPrinting(t *testing.T) {
 	initTestFlags(t)
 	g := NewWithT(t)

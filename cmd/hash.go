@@ -33,7 +33,7 @@ func (v *ValkeyNode) analyzeHash() error {
 		for _, key := range entry.Elements {
 			err = v.analyzeHashField(key)
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("analyze hash key %q: %w", key, err)
 			}
 		}
 		cursor = entry.Cursor
