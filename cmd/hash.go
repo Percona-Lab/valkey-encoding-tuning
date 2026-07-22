@@ -35,7 +35,7 @@ func makeHashMetrics() HashMetrics {
 func (v *ValkeyNode) analyzeHash() error {
 	var cursor uint64
 	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), hashDt, *hashKeyPattern, cursor)
+		entry, err := scan(v.getClient(), hashDt, v.opts().HashKeyPattern, cursor)
 		if err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 		fCount := 0
 		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i += 2 {
-			if fieldPatternRE != nil && !fieldPatternRE.MatchString(entry.Elements[i]) {
+			if v.opts().FieldPatternRE != nil && !v.opts().FieldPatternRE.MatchString(entry.Elements[i]) {
 				continue
 			}
 			fCount += 2

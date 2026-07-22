@@ -36,7 +36,7 @@ func makeSetMetrics() SetMetrics {
 func (v *ValkeyNode) analyzeSet() error {
 	var cursor uint64
 	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), setDt, *setKeyPattern, cursor)
+		entry, err := scan(v.getClient(), setDt, v.opts().SetKeyPattern, cursor)
 		if err != nil {
 			return err
 		}

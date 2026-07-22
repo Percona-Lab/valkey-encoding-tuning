@@ -69,7 +69,7 @@ func (v *ValkeyNode) analyzeList() error {
 
 	var cursor uint64
 	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), listDt, *listKeyPattern, cursor)
+		entry, err := scan(v.getClient(), listDt, v.opts().ListKeyPattern, cursor)
 		if err != nil {
 			return err
 		}

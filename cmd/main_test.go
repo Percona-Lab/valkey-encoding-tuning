@@ -31,32 +31,17 @@ func initTestFlags(t *testing.T) {
 	t.Helper()
 
 	oldCommandLine := flag.CommandLine
-	oldBootstrapAddress := bootstrapAddress
-	oldBootstrapUsername := bootstrapUsername
-	oldBootstrapPassword := bootstrapPassword
-	oldKeyPattern := hashKeyPattern
-	oldListKeyPattern := listKeyPattern
-	oldFieldPattern := fieldPattern
-	oldFieldPatternRE := fieldPatternRE
-	oldPrintOutput := printOutput
+	oldOptions := options
 	oldFlagsInitialized := flagsInitialized
 
 	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)
 	flagsInitialized = nil
-	fieldPatternRE = nil
 	initFlags()
 
 	t.Cleanup(func() {
 		flag.CommandLine = oldCommandLine
-		bootstrapAddress = oldBootstrapAddress
-		bootstrapUsername = oldBootstrapUsername
-		bootstrapPassword = oldBootstrapPassword
-		hashKeyPattern = oldKeyPattern
-		listKeyPattern = oldListKeyPattern
-		fieldPattern = oldFieldPattern
-		fieldPatternRE = oldFieldPatternRE
-		printOutput = oldPrintOutput
+		options = oldOptions
 		flagsInitialized = oldFlagsInitialized
 	})
 }

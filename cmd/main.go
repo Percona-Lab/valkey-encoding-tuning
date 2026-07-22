@@ -15,22 +15,27 @@ const (
 )
 
 var (
-	bootstrapAddress  *string
-	bootstrapUsername *string
-	bootstrapPassword *string
-	hashKeyPattern    *string
-	listKeyPattern    *string
-	setKeyPattern     *string
-	zsetKeyPattern    *string
-	fieldPattern      *string
-	fieldPatternRE    *regexp.Regexp
-	printOutput       *bool
-	flagsInitialized  *flag.FlagSet
-	outFile           *string
+	options          = defaultOptions()
+	flagsInitialized *flag.FlagSet
 )
+
+type Options struct {
+	Address        string
+	Username       string
+	Password       string
+	HashKeyPattern string
+	ListKeyPattern string
+	SetKeyPattern  string
+	ZSetKeyPattern string
+	FieldPattern   string
+	FieldPatternRE *regexp.Regexp
+	PrintOutput    bool
+	OutputFile     string
+}
 
 type ValkeyNode struct {
 	Address     string
+	Options     *Options
 	Client      valkey.Client
 	Config      map[string]string
 	HashMetrics HashMetrics
@@ -41,9 +46,16 @@ type ValkeyNode struct {
 
 func (v *ValkeyNode) getClient() valkey.Client {
 	if v.Client == nil {
-		v.Client = createClient(v.Address)
+		v.Client = createClientWithOptions(v.Address, v.opts())
 	}
 	return v.Client
+}
+
+func (v *ValkeyNode) opts() *Options {
+	if v.Options == nil {
+		v.Options = &options
+	}
+	return v.Options
 }
 
 func (v *ValkeyNode) Close() {
@@ -54,6 +66,10 @@ func (v *ValkeyNode) Close() {
 }
 
 func createClient(address string) valkey.Client {
+	return createClientWithOptions(address, &options)
+}
+
+func createClientWithOptions(address string, opts *Options) valkey.Client {
 	var clientOption valkey.ClientOption
 	if strings.Contains(address, ":") {
 		clientOption = valkey.ClientOption{
@@ -64,11 +80,11 @@ func createClient(address string) valkey.Client {
 		clientOption = valkey.MustParseURL("unix://" + address)
 		clientOption.ForceSingleClient = true
 	}
-	if bootstrapUsername != nil && *bootstrapUsername != "" {
-		clientOption.Username = *bootstrapUsername
+	if opts != nil && opts.Username != "" {
+		clientOption.Username = opts.Username
 	}
-	if bootstrapPassword != nil && *bootstrapPassword != "" {
-		clientOption.Password = *bootstrapPassword
+	if opts != nil && opts.Password != "" {
+		clientOption.Password = opts.Password
 	}
 	client, err := valkey.NewClient(clientOption)
 	if err != nil {
@@ -80,6 +96,7 @@ func createClient(address string) valkey.Client {
 func makeValkeyNode(address string) ValkeyNode {
 	return ValkeyNode{
 		Address:     address,
+		Options:     &options,
 		HashMetrics: makeHashMetrics(),
 		ListMetrics: makeListMetrics(),
 		SetMetrics:  makeSetMetrics(),
@@ -91,7 +108,8 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 	var nodes []ValkeyNode
 
 	ctx := context.Background()
-	client := createClient(bootstrapNode.Address)
+	bootstrapOptions := bootstrapNode.opts()
+	client := createClientWithOptions(bootstrapNode.Address, bootstrapOptions)
 	defer client.Close()
 	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
 	if err != nil {
@@ -110,6 +128,7 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 				continue
 			}
 			node := makeValkeyNode(strings.Split(nodeDetails[1], "@")[0])
+			node.Options = bootstrapOptions
 			nodes = append(nodes, node)
 		}
 	}
@@ -151,7 +170,8 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		cs.getZSetDatatypeAnalysis(&clusterAnalysis)
 	}
 
-	if *printOutput {
+	bootstrapOptions := bootstrapNode.opts()
+	if bootstrapOptions.PrintOutput {
 
 		fmt.Println("# Hash Datatype Analysis")
 		for _, analysis := range analyses {
@@ -185,8 +205,8 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 			fmt.Println(clusterAnalysis.renderZSetMarkdown())
 		}
 	}
-	if *outFile != "" {
-		err := writeJson(*outFile,
+	if bootstrapOptions.OutputFile != "" {
+		err := writeJson(bootstrapOptions.OutputFile,
 			map[string]any{
 				"nodes":   analyses,
 				"cluster": clusterAnalysis,
@@ -199,27 +219,35 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 	return cs
 }
 
+func defaultOptions() Options {
+	return Options{
+		Address:     "127.0.0.1:6379",
+		PrintOutput: true,
+	}
+}
+
 func initFlags() {
 	if flagsInitialized == flag.CommandLine {
 		return
 	}
-	bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
-	bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
-	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
-	hashKeyPattern = flag.String("hash-key-pattern", "", "Pattern (glob style) of the HASH keys to be analyzed")
-	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the LIST keys to be analyzed")
-	setKeyPattern = flag.String("set-key-pattern", "", "Pattern (glob style) of the SET keys to be analyzed")
-	zsetKeyPattern = flag.String("zset-key-pattern", "", "Pattern (glob style) of the SORTED SET keys to be analyzed")
-	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
-	printOutput = flag.Bool("print-output", true, "Print output to stdout")
-	outFile = flag.String("output-file", "", "Output file name")
+	options = defaultOptions()
+	flag.StringVar(&options.Address, "address", options.Address, "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
+	flag.StringVar(&options.Password, "password", "", "Password of the Valkey user")
+	flag.StringVar(&options.Username, "username", "", "Name of the Valkey user")
+	flag.StringVar(&options.HashKeyPattern, "hash-key-pattern", "", "Pattern (glob style) of the HASH keys to be analyzed")
+	flag.StringVar(&options.ListKeyPattern, "list-key-pattern", "", "Pattern (glob style) of the LIST keys to be analyzed")
+	flag.StringVar(&options.SetKeyPattern, "set-key-pattern", "", "Pattern (glob style) of the SET keys to be analyzed")
+	flag.StringVar(&options.ZSetKeyPattern, "zset-key-pattern", "", "Pattern (glob style) of the SORTED SET keys to be analyzed")
+	flag.StringVar(&options.FieldPattern, "field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
+	flag.BoolVar(&options.PrintOutput, "print-output", options.PrintOutput, "Print output to stdout")
+	flag.StringVar(&options.OutputFile, "output-file", "", "Output file name")
 	flagsInitialized = flag.CommandLine
 }
 func parseArguments() {
-	if *fieldPattern != "" {
-		fieldPatternRE = regexp.MustCompile(*fieldPattern)
+	if options.FieldPattern != "" {
+		options.FieldPatternRE = regexp.MustCompile(options.FieldPattern)
 	} else {
-		fieldPatternRE = nil
+		options.FieldPatternRE = nil
 	}
 }
 
@@ -227,6 +255,6 @@ func main() {
 	initFlags()
 	flag.Parse()
 	parseArguments()
-	v := makeValkeyNode(*bootstrapAddress)
+	v := makeValkeyNode(options.Address)
 	analyzeCluster(v)
 }
