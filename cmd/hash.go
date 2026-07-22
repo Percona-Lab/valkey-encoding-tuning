@@ -23,22 +23,12 @@ func makeHashMetrics() HashMetrics {
 }
 
 func (v *ValkeyNode) analyzeHash() error {
-	var cursor uint64
-	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), hashDt, v.opts().HashKeyPattern, cursor)
-		if err != nil {
-			return err
-		}
-		v.HashMetrics.objCnt += len(entry.Elements)
-		for _, key := range entry.Elements {
-			err = v.analyzeHashField(key)
-			if err != nil {
-				return fmt.Errorf("analyze hash key %q: %w", key, err)
-			}
-		}
-		cursor = entry.Cursor
-	}
-	return nil
+	return v.analyze(hashDt,
+		func(count int) {
+			v.HashMetrics.objCnt += count
+		},
+		v.analyzeHashField,
+	)
 }
 
 func (v *ValkeyNode) analyzeHashField(hash string) error {
@@ -65,8 +55,8 @@ func (v *ValkeyNode) analyzeHashField(hash string) error {
 			}
 			fSize := len(entry.Elements[i])
 			vSize := len(entry.Elements[i+1])
-			v.HashMetrics.fieldStats.add(fmt.Sprintf("%s.%s", hash, entry.Elements[i]), fSize)
-			v.HashMetrics.fieldStats.add(fmt.Sprintf("%s.%s (field name)", hash, entry.Elements[i]), vSize)
+			v.HashMetrics.fieldStats.add(fmt.Sprintf("%s.%s (field name)", hash, entry.Elements[i]), fSize)
+			v.HashMetrics.fieldStats.add(fmt.Sprintf("%s.%s (field value)", hash, entry.Elements[i]), vSize)
 			isHashtable = (fSize >= maxLpSize || vSize >= maxLpSize)
 		}
 		cursor = entry.Cursor

@@ -98,14 +98,48 @@ func (v *ValkeyNode) getObjectEncoding(key string) string {
 	return output
 }
 
-func scan(client valkey.Client, dtype, keyPattern string, cursor uint64) (valkey.ScanEntry, error) {
-	scanCmd := client.B().Scan().Cursor(cursor)
-	if keyPattern != "" {
-		scanCmd.Match(keyPattern)
+func (v *ValkeyNode) scan(dtype string, cursor uint64) (valkey.ScanEntry, error) {
+	var filter *string
+	switch dtype {
+	case hashDt:
+		filter = &v.opts().HashKeyPattern
+	case listDt:
+		filter = &v.opts().ListKeyPattern
+	case setDt:
+		filter = &v.opts().SetKeyPattern
+	case zsetDt:
+		filter = &v.opts().ZSetKeyPattern
+	default:
+		return valkey.ScanEntry{}, fmt.Errorf("invalid datatype: %s", dtype)
+	}
+
+	scanCmd := v.getClient().B().Scan().Cursor(cursor)
+	if *filter != "" {
+		scanCmd.Match(*filter)
 	}
 	scanCmd.Type(dtype)
-	resp := client.Do(context.Background(), scanCmd.Build())
+	resp := v.getClient().Do(context.Background(), scanCmd.Build())
 	return resp.AsScanEntry()
+}
+
+func (v *ValkeyNode) analyze(dtype string, countKeys func(int), analyzeKey func(string) error) error {
+	var cursor uint64
+	for ok := true; ok; ok = (cursor != 0) {
+		entry, err := v.scan(dtype, cursor)
+		if err != nil {
+			return err
+		}
+		if countKeys != nil {
+			countKeys(len(entry.Elements))
+		}
+		for _, key := range entry.Elements {
+			if err := analyzeKey(key); err != nil {
+				return fmt.Errorf("analyze %s key %q: %w", dtype, key, err)
+			}
+		}
+		cursor = entry.Cursor
+	}
+	return nil
 }
 
 func max[T cmp.Ordered](x, y T) T {

@@ -23,23 +23,12 @@ func makeZSetMetrics() ZSetMetrics {
 }
 
 func (v *ValkeyNode) analyzeZSet() error {
-	var cursor uint64
-	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), zsetDt, v.opts().ZSetKeyPattern, cursor)
-		if err != nil {
-			return err
-		}
-		v.ZSetMetrics.objCnt += len(entry.Elements)
-		for _, key := range entry.Elements {
-			err = v.analyzeZSetMembers(key)
-			if err != nil {
-				return fmt.Errorf("analyze zset key %q: %w", key, err)
-			}
-		}
-		cursor = entry.Cursor
-	}
-	return nil
-
+	return v.analyze(zsetDt,
+		func(count int) {
+			v.ZSetMetrics.objCnt += count
+		},
+		v.analyzeZSetMembers,
+	)
 }
 
 func (v *ValkeyNode) analyzeZSetMembers(zset string) error {

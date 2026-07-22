@@ -24,23 +24,12 @@ func makeSetMetrics() SetMetrics {
 }
 
 func (v *ValkeyNode) analyzeSet() error {
-	var cursor uint64
-	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), setDt, v.opts().SetKeyPattern, cursor)
-		if err != nil {
-			return err
-		}
-		v.SetMetrics.objCnt += len(entry.Elements)
-		for _, key := range entry.Elements {
-			err = v.analyzeSetMembers(key)
-			if err != nil {
-				return fmt.Errorf("analyze set key %q: %w", key, err)
-			}
-		}
-		cursor = entry.Cursor
-	}
-	return nil
-
+	return v.analyze(setDt,
+		func(count int) {
+			v.SetMetrics.objCnt += count
+		},
+		v.analyzeSetMembers,
+	)
 }
 
 func (v *ValkeyNode) analyzeSetMembers(set string) error {

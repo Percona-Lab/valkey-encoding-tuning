@@ -69,21 +69,7 @@ func (v *ValkeyNode) analyzeList() error {
 	}
 	v.ListMetrics.nodeDivisionType = limit.nodeDivisionType
 
-	var cursor uint64
-	for ok := true; ok; ok = (cursor != 0) {
-		entry, err := scan(v.getClient(), listDt, v.opts().ListKeyPattern, cursor)
-		if err != nil {
-			return err
-		}
-		for _, key := range entry.Elements {
-			err := v.analyzeListKey(key)
-			if err != nil {
-				return fmt.Errorf("analyze list key %q: %w", key, err)
-			}
-		}
-		cursor = entry.Cursor
-	}
-	return nil
+	return v.analyze(listDt, nil, v.analyzeListKey)
 }
 
 func (v *ValkeyNode) analyzeListKey(key string) error {
