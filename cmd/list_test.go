@@ -84,7 +84,7 @@ func TestAnalyzeListScansOnlyListKeys(t *testing.T) {
 	g.Expect(err).To(BeNil())
 
 	g.Expect(v.analyzeList()).To(Succeed())
-	g.Expect(v.ListMetrics.objCount).To(Equal(int64(2)))
+	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(2)))
 }
 
 func TestAnalyzeListWithKeyFilterMatchedPattern(t *testing.T) {
@@ -98,7 +98,7 @@ func TestAnalyzeListWithKeyFilterMatchedPattern(t *testing.T) {
 	rpushTestList(t, client, "list:other:1", "c")
 
 	g.Expect(v.analyzeList()).To(Succeed())
-	g.Expect(v.ListMetrics.objCount).To(Equal(int64(2)))
+	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(2)))
 }
 
 func TestAnalyzeListWithKeyFilterNotMatchingPattern(t *testing.T) {
@@ -111,7 +111,7 @@ func TestAnalyzeListWithKeyFilterNotMatchingPattern(t *testing.T) {
 	rpushTestList(t, client, "list:2", "b")
 
 	g.Expect(v.analyzeList()).To(Succeed())
-	g.Expect(v.ListMetrics.objCount).To(Equal(int64(0)))
+	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(0)))
 }
 
 func TestAnalyzeListKeyUpdatesObjectCount(t *testing.T) {
@@ -121,7 +121,7 @@ func TestAnalyzeListKeyUpdatesObjectCount(t *testing.T) {
 
 	g.Expect(v.analyzeListKey("list:1")).To(Succeed())
 
-	g.Expect(v.ListMetrics.objCount).To(Equal(int64(1)))
+	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(1)))
 }
 
 func TestAnalyzeListKeyUpdatesElementCountMetrics(t *testing.T) {
@@ -131,8 +131,8 @@ func TestAnalyzeListKeyUpdatesElementCountMetrics(t *testing.T) {
 
 	g.Expect(v.analyzeListKey("list:1")).To(Succeed())
 
-	g.Expect(v.ListMetrics.maxElementCount).To(Equal(int64(3)))
-	g.Expect(v.ListMetrics.avgElementCount).To(Equal(int64(3)))
+	g.Expect(v.ListMetrics.maxElementCnt).To(Equal(int64(3)))
+	g.Expect(v.ListMetrics.avgElementCnt).To(Equal(int64(3)))
 }
 
 func TestAnalyzeListKeyUpdatesObjectSizeMetrics(t *testing.T) {
@@ -182,7 +182,7 @@ func TestAnalyzeListKeyCalculatesNodeCountFromOptimizationLevel(t *testing.T) {
 	if expectedNodeCount < 1 {
 		expectedNodeCount = 1
 	}
-	g.Expect(v.ListMetrics.maxNodeCount).To(Equal(expectedNodeCount))
+	g.Expect(v.ListMetrics.maxNodeCnt).To(Equal(expectedNodeCount))
 }
 
 func TestAnalyzeListKeySetsMinimumNodeCountToOne(t *testing.T) {
@@ -193,8 +193,8 @@ func TestAnalyzeListKeySetsMinimumNodeCountToOne(t *testing.T) {
 
 	g.Expect(v.analyzeListKey("list:1")).To(Succeed())
 
-	g.Expect(v.ListMetrics.maxNodeCount).To(Equal(int64(1)))
-	g.Expect(v.ListMetrics.avgNodeCount).To(Equal(int64(1)))
+	g.Expect(v.ListMetrics.maxNodeCnt).To(Equal(int64(1)))
+	g.Expect(v.ListMetrics.avgNodeCnt).To(Equal(int64(1)))
 }
 
 func TestAnalyzeListKeyCalculatesMultipleNodesByElementCount(t *testing.T) {
@@ -205,8 +205,8 @@ func TestAnalyzeListKeyCalculatesMultipleNodesByElementCount(t *testing.T) {
 
 	g.Expect(v.analyzeListKey("list:1")).To(Succeed())
 
-	g.Expect(v.ListMetrics.maxNodeCount).To(Equal(int64(3)))
-	g.Expect(v.ListMetrics.avgNodeCount).To(Equal(int64(3)))
+	g.Expect(v.ListMetrics.maxNodeCnt).To(Equal(int64(3)))
+	g.Expect(v.ListMetrics.avgNodeCnt).To(Equal(int64(3)))
 }
 
 func TestAnalyzeListKeyCalculatesMultipleNodesByObjectSize(t *testing.T) {
@@ -218,8 +218,8 @@ func TestAnalyzeListKeyCalculatesMultipleNodesByObjectSize(t *testing.T) {
 
 	g.Expect(v.analyzeListKey("list:1")).To(Succeed())
 
-	g.Expect(v.ListMetrics.maxNodeCount).To(BeNumerically(">", 2))
-	g.Expect(v.ListMetrics.avgNodeCount).To(BeNumerically(">", 2))
+	g.Expect(v.ListMetrics.maxNodeCnt).To(BeNumerically(">", 2))
+	g.Expect(v.ListMetrics.avgNodeCnt).To(BeNumerically(">", 2))
 }
 
 func TestAnalyzeListKeyReturnsErrorForInvalidPositiveListMaxListpackSize(t *testing.T) {
@@ -229,6 +229,60 @@ func TestAnalyzeListKeyReturnsErrorForInvalidPositiveListMaxListpackSize(t *test
 	rpushTestList(t, client, "list:1", "a")
 
 	g.Expect(v.analyzeListKey("list:1")).To(HaveOccurred())
+}
+
+func TestAnalyzeListKeyReturnsErrorForUnsupportedNegativeListMaxListpackSize(t *testing.T) {
+	g := NewWithT(t)
+	v, client := setupListTestNode(t)
+	v.Config[listMaxListpackSize] = "-6"
+	rpushTestList(t, client, "list:1", "a")
+
+	g.Expect(v.analyzeListKey("list:1")).To(HaveOccurred())
+	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(0)))
+}
+
+func TestEstimateListNodeCountReturnsErrorForZeroLimit(t *testing.T) {
+	g := NewWithT(t)
+
+	_, err := estimateListNodeCount("0", 1, 1)
+
+	g.Expect(err).To(HaveOccurred())
+}
+
+func TestUpdateListStatisticsMergesWeightedAverages(t *testing.T) {
+	g := NewWithT(t)
+	cluster := makeListMetrics()
+	cluster.nodeDivisionType = BySize
+	cluster.objCnt = 2
+	cluster.avgNodeCnt = 3
+	cluster.avgObjSize = 10
+	cluster.avgElementCnt = 4
+	cluster.maxNodeCnt = 5
+	cluster.maxObjSize = 20
+	cluster.maxElementCnt = 6
+	cluster.tdigest.Add(10)
+
+	node := makeListMetrics()
+	node.nodeDivisionType = BySize
+	node.objCnt = 3
+	node.avgNodeCnt = 8
+	node.avgObjSize = 30
+	node.avgElementCnt = 9
+	node.maxNodeCnt = 12
+	node.maxObjSize = 40
+	node.maxElementCnt = 15
+	node.tdigest.Add(30)
+
+	cluster.updateListStatistics(&node)
+
+	g.Expect(cluster.objCnt).To(Equal(int64(5)))
+	g.Expect(cluster.avgNodeCnt).To(Equal(int64(6)))
+	g.Expect(cluster.avgObjSize).To(Equal(int64(22)))
+	g.Expect(cluster.avgElementCnt).To(Equal(int64(7)))
+	g.Expect(cluster.maxNodeCnt).To(Equal(int64(12)))
+	g.Expect(cluster.maxObjSize).To(Equal(int64(40)))
+	g.Expect(cluster.maxElementCnt).To(Equal(int64(15)))
+	g.Expect(cluster.tdigest.Count()).To(Equal(uint64(2)))
 }
 
 func TestGetListDatatypeAnalysisPopulatesStructWithoutPrinting(t *testing.T) {
@@ -246,7 +300,7 @@ func TestGetListDatatypeAnalysisPopulatesStructWithoutPrinting(t *testing.T) {
 	g.Expect(output).To(BeEmpty())
 	g.Expect(analysis.Address).To(Equal("node-1"))
 	g.Expect(analysis.Config[listMaxListpackSize]).To(Equal("-2"))
-	listMetrics := analysis.Metrics["list"].(map[string]any)
-	g.Expect(listMetrics["object_count"]).To(Equal(int64(0)))
-	g.Expect(listMetrics["distribution"]).To(HaveLen(10))
+	listMetrics := analysis.Metrics[listDt].(map[string]any)
+	g.Expect(listMetrics[kObjCnt]).To(Equal(int64(0)))
+	g.Expect(listMetrics[kDistribution]).To(HaveLen(10))
 }

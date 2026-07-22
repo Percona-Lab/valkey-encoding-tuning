@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-
-	"github.com/caio/go-tdigest/v5"
 )
 
 const (
@@ -15,60 +13,22 @@ const (
 )
 
 type ZSetMetrics struct {
-	tdigest       *tdigest.TDigest
-	objCount      int
-	memberCount   int
-	skipListCount uint64
-	maxField      string
-	avgFieldSize  float64
-	maxFieldSize  int
+	elementStats sizeStats
+	objCnt       int
+	skipListCnt  uint64
 }
 
 func makeZSetMetrics() ZSetMetrics {
-	t, err := tdigest.New()
-	if err != nil {
-		panic(err)
-	}
-	return ZSetMetrics{tdigest: t}
+	return ZSetMetrics{elementStats: makeSizeStats()}
 }
 
 func (v *ValkeyNode) analyzeZSet() error {
-	ctx := context.Background()
-
-	client := v.getClient()
-	err := client.Do(ctx, client.B().Readonly().Build()).Error()
-	if err != nil {
-		panic(err)
-	}
-	var cursor uint64
-	for {
-		scanCmd := client.B().Scan().Cursor(cursor)
-		if *zsetKeyPattern != "" {
-			scanCmd.Match(*zsetKeyPattern)
-		}
-		scanCmd.Type(zsetDt)
-		resp := client.Do(
-			ctx,
-			scanCmd.Build(),
-		)
-		entry, err := resp.AsScanEntry()
-		if err != nil {
-			return err
-		}
-		v.ZSetMetrics.objCount += len(entry.Elements)
-		for _, key := range entry.Elements {
-			err = v.analyzeZSetMembers(key)
-			if err != nil {
-				panic(err)
-			}
-		}
-		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
-	}
-	return nil
-
+	return v.analyze(zsetDt,
+		func(count int) {
+			v.ZSetMetrics.objCnt += count
+		},
+		v.analyzeZSetMembers,
+	)
 }
 
 func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
@@ -81,7 +41,7 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 	if err != nil {
 		return err
 	}
-	for {
+	for ok := true; ok; ok = (cursor != 0) {
 		resp := client.Do(
 			ctx,
 			client.B().Zscan().Key(zset).Cursor(cursor).Noscores().Build(),
@@ -90,30 +50,15 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 		if err != nil {
 			return err
 		}
-		mCount := 0
-		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i++ {
-			mCount++
 			fSize := len(entry.Elements[i])
-			metrics.tdigest.Add(float64(fSize))
-			fTotalSize += fSize
+			metrics.elementStats.add(fmt.Sprintf("%s.%s", zset, entry.Elements[i]), fSize)
 			isHashtable = fSize >= maxLpSize
-			if fSize > metrics.maxFieldSize {
-				metrics.maxFieldSize = fSize
-				metrics.maxField = fmt.Sprintf("%s.%s", zset, entry.Elements[i])
-			}
-		}
-		if mCount > 0 {
-			metrics.avgFieldSize = float64((fTotalSize + int(float64(metrics.memberCount)*metrics.avgFieldSize)) / (metrics.memberCount + mCount))
-			metrics.memberCount += mCount
 		}
 		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
 	}
 	if isHashtable {
-		metrics.skipListCount++
+		metrics.skipListCnt++
 	}
 	return nil
 }
@@ -124,26 +69,18 @@ func (v *ValkeyNode) getZSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[zsetMaxListpackEntries] = v.Config[zsetMaxListpackEntries]
 	metrics := v.ZSetMetrics
 	analysis.Metrics[zsetDt] = map[string]any{
-		"object_count":       metrics.objCount,
-		"skiplist_key_count": metrics.skipListCount,
-		"items_count":        metrics.memberCount,
-		"largest_field":      metrics.maxField,
-		"largest_field_size": metrics.maxFieldSize,
-		"avg_field_size":     metrics.avgFieldSize,
-		"distribution":       quantileDistribution(metrics.tdigest),
+		kObjCnt:         metrics.objCnt,
+		kSlKeyCnt:       metrics.skipListCnt,
+		kElementsCnt:    metrics.elementStats.count,
+		kMaxElement:     metrics.elementStats.maxItem,
+		kMaxElementSize: metrics.elementStats.maxSize,
+		kAvgElementSize: metrics.elementStats.avgSize,
+		kDistribution:   quantileDistribution(metrics.elementStats.tdigest),
 	}
 }
 
 func (zm *ZSetMetrics) updateZSetStatistics(node *ZSetMetrics) {
-	runningTotalField := (zm.memberCount + node.memberCount)
-	runningTotalFieldSize := (float64(zm.memberCount*int(zm.avgFieldSize)) + float64(node.memberCount*int(node.avgFieldSize)))
-	zm.avgFieldSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	zm.memberCount = runningTotalField
-	if node.maxFieldSize > zm.maxFieldSize {
-		zm.maxFieldSize = node.maxFieldSize
-		zm.maxField = node.maxField
-	}
-	zm.skipListCount += node.skipListCount
-	zm.objCount += node.objCount
-	zm.tdigest.Merge(node.tdigest)
+	zm.elementStats.merge(&node.elementStats)
+	zm.skipListCnt += node.skipListCnt
+	zm.objCnt += node.objCnt
 }

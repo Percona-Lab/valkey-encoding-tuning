@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -15,22 +16,27 @@ const (
 )
 
 var (
-	bootstrapAddress  *string
-	bootstrapUsername *string
-	bootstrapPassword *string
-	hashKeyPattern    *string
-	listKeyPattern    *string
-	setKeyPattern     *string
-	zsetKeyPattern    *string
-	fieldPattern      *string
-	fieldPatternRE    *regexp.Regexp
-	printOutput       *bool
-	flagsInitialized  *flag.FlagSet
-	outFile           *string
+	options          = defaultOptions()
+	flagsInitialized *flag.FlagSet
 )
+
+type Options struct {
+	Address        string
+	Username       string
+	Password       string
+	HashKeyPattern string
+	ListKeyPattern string
+	SetKeyPattern  string
+	ZSetKeyPattern string
+	FieldPattern   string
+	FieldPatternRE *regexp.Regexp
+	PrintOutput    bool
+	OutputFile     string
+}
 
 type ValkeyNode struct {
 	Address     string
+	Options     *Options
 	Client      valkey.Client
 	Config      map[string]string
 	HashMetrics HashMetrics
@@ -41,9 +47,16 @@ type ValkeyNode struct {
 
 func (v *ValkeyNode) getClient() valkey.Client {
 	if v.Client == nil {
-		v.Client = createClient(v.Address)
+		v.Client = createClientWithOptions(v.Address, v.opts())
 	}
 	return v.Client
+}
+
+func (v *ValkeyNode) opts() *Options {
+	if v.Options == nil {
+		v.Options = &options
+	}
+	return v.Options
 }
 
 func (v *ValkeyNode) Close() {
@@ -54,6 +67,10 @@ func (v *ValkeyNode) Close() {
 }
 
 func createClient(address string) valkey.Client {
+	return createClientWithOptions(address, &options)
+}
+
+func createClientWithOptions(address string, opts *Options) valkey.Client {
 	var clientOption valkey.ClientOption
 	if strings.Contains(address, ":") {
 		clientOption = valkey.ClientOption{
@@ -64,11 +81,11 @@ func createClient(address string) valkey.Client {
 		clientOption = valkey.MustParseURL("unix://" + address)
 		clientOption.ForceSingleClient = true
 	}
-	if bootstrapUsername != nil && *bootstrapUsername != "" {
-		clientOption.Username = *bootstrapUsername
+	if opts != nil && opts.Username != "" {
+		clientOption.Username = opts.Username
 	}
-	if bootstrapPassword != nil && *bootstrapPassword != "" {
-		clientOption.Password = *bootstrapPassword
+	if opts != nil && opts.Password != "" {
+		clientOption.Password = opts.Password
 	}
 	client, err := valkey.NewClient(clientOption)
 	if err != nil {
@@ -80,6 +97,7 @@ func createClient(address string) valkey.Client {
 func makeValkeyNode(address string) ValkeyNode {
 	return ValkeyNode{
 		Address:     address,
+		Options:     &options,
 		HashMetrics: makeHashMetrics(),
 		ListMetrics: makeListMetrics(),
 		SetMetrics:  makeSetMetrics(),
@@ -87,16 +105,17 @@ func makeValkeyNode(address string) ValkeyNode {
 	}
 }
 
-func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
+func getClusterNodes(bootstrapNode ValkeyNode) ([]ValkeyNode, error) {
 	var nodes []ValkeyNode
 
 	ctx := context.Background()
-	client := createClient(bootstrapNode.Address)
+	bootstrapOptions := bootstrapNode.opts()
+	client := createClientWithOptions(bootstrapNode.Address, bootstrapOptions)
 	defer client.Close()
 	clusterNodes, err := client.Do(ctx, client.B().ClusterNodes().Build()).ToString()
 	if err != nil {
 		if err.Error() != errNotClusterMode {
-			panic(err)
+			return nil, err
 		}
 		nodes = append(nodes, bootstrapNode)
 	} else {
@@ -110,35 +129,36 @@ func getClusterNodes(bootstrapNode ValkeyNode) []ValkeyNode {
 				continue
 			}
 			node := makeValkeyNode(strings.Split(nodeDetails[1], "@")[0])
+			node.Options = bootstrapOptions
 			nodes = append(nodes, node)
 		}
 	}
-	return nodes
+	return nodes, nil
 }
-func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
-	nodes := getClusterNodes(bootstrapNode)
+
+type clusterAnalysisResult struct {
+	Summary   ValkeyNode
+	Output    AnalysisOutput
+	IsCluster bool
+}
+
+func analyzeClusterData(bootstrapNode ValkeyNode) (clusterAnalysisResult, error) {
+	nodes, err := getClusterNodes(bootstrapNode)
+	if err != nil {
+		return clusterAnalysisResult{}, err
+	}
 	isCluster := len(nodes) > 1
 	analyses := make([]Analysis, 0)
 
 	cs := makeValkeyNode("")
 	for _, v := range nodes {
-		v.getNodeConfig()
-
-		var analysis Analysis
-		v.analyzeHash()
-		v.getHashDatatypeAnalysis(&analysis)
+		analysis, err := analyzeNode(&v)
+		if err != nil {
+			return clusterAnalysisResult{}, err
+		}
 		cs.HashMetrics.updateHashStatistics(&v.HashMetrics)
-
-		v.analyzeList()
-		v.getListDatatypeAnalysis(&analysis)
 		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
-
-		v.analyzeSet()
-		v.getSetDatatypeAnalysis(&analysis)
 		cs.SetMetrics.updateSetStatistics(&v.SetMetrics)
-
-		v.analyzeZSet()
-		v.getZSetDatatypeAnalysis(&analysis)
 		cs.ZSetMetrics.updateZSetStatistics(&v.ZSetMetrics)
 
 		analyses = append(analyses, analysis)
@@ -151,75 +171,139 @@ func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
 		cs.getZSetDatatypeAnalysis(&clusterAnalysis)
 	}
 
-	if *printOutput {
+	return clusterAnalysisResult{
+		Summary: cs,
+		Output: AnalysisOutput{
+			Nodes:   analyses,
+			Cluster: &clusterAnalysis,
+		},
+		IsCluster: isCluster,
+	}, nil
+}
 
-		fmt.Println("# Hash Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderHashMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderHashMarkdown())
-		}
-
-		fmt.Println("# List Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderListMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderListMarkdown())
-		}
-
-		fmt.Println("# Set Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderSetMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderSetMarkdown())
-		}
-
-		fmt.Println("# Sorted Set Datatype Analysis")
-		for _, analysis := range analyses {
-			fmt.Println(analysis.renderZSetMarkdown())
-		}
-		if isCluster {
-			fmt.Println(clusterAnalysis.renderZSetMarkdown())
-		}
+func analyzeNode(v *ValkeyNode) (Analysis, error) {
+	if err := v.getNodeConfig(); err != nil {
+		return Analysis{}, fmt.Errorf("get config for node %s: %w", v.Address, err)
 	}
-	if *outFile != "" {
-		err := writeJson(*outFile,
-			map[string]any{
-				"nodes":   analyses,
-				"cluster": clusterAnalysis,
-			},
-		)
-		if err != nil {
-			panic(err)
-		}
+
+	var analysis Analysis
+	if err := v.analyzeHash(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze hash keys on node %s: %w", v.Address, err)
 	}
-	return cs
+	v.getHashDatatypeAnalysis(&analysis)
+
+	if err := v.analyzeList(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze list keys on node %s: %w", v.Address, err)
+	}
+	v.getListDatatypeAnalysis(&analysis)
+
+	if err := v.analyzeSet(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze set keys on node %s: %w", v.Address, err)
+	}
+	v.getSetDatatypeAnalysis(&analysis)
+
+	if err := v.analyzeZSet(); err != nil {
+		return Analysis{}, fmt.Errorf("analyze zset keys on node %s: %w", v.Address, err)
+	}
+	v.getZSetDatatypeAnalysis(&analysis)
+
+	return analysis, nil
+}
+
+func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
+	fmt.Println("# Hash Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderHashMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderHashMarkdown())
+	}
+
+	fmt.Println("# List Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderListMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderListMarkdown())
+	}
+
+	fmt.Println("# Set Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderSetMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderSetMarkdown())
+	}
+
+	fmt.Println("# Sorted Set Datatype Analysis")
+	for _, analysis := range output.Nodes {
+		fmt.Println(analysis.renderZSetMarkdown())
+	}
+	if isCluster {
+		fmt.Println(output.Cluster.renderZSetMarkdown())
+	}
+}
+
+func writeClusterAnalysis(opts *Options, output AnalysisOutput) error {
+	if opts.OutputFile == "" {
+		return nil
+	}
+	return writeJson(opts.OutputFile, output)
+}
+
+func runClusterAnalysis(bootstrapNode ValkeyNode) (ValkeyNode, error) {
+	result, err := analyzeClusterData(bootstrapNode)
+	if err != nil {
+		return ValkeyNode{}, err
+	}
+	bootstrapOptions := bootstrapNode.opts()
+	if bootstrapOptions.PrintOutput {
+		renderClusterAnalysis(result.Output, result.IsCluster)
+	}
+	if err := writeClusterAnalysis(bootstrapOptions, result.Output); err != nil {
+		return ValkeyNode{}, err
+	}
+	return result.Summary, nil
+}
+
+func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
+	summary, err := runClusterAnalysis(bootstrapNode)
+	if err != nil {
+		panic(err)
+	}
+	return summary
+}
+
+func defaultOptions() Options {
+	return Options{
+		Address:     "127.0.0.1:6379",
+		PrintOutput: true,
+	}
 }
 
 func initFlags() {
 	if flagsInitialized == flag.CommandLine {
 		return
 	}
-	bootstrapAddress = flag.String("address", "127.0.0.1:6379", "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
-	bootstrapPassword = flag.String("password", "", "Password of the Valkey user")
-	bootstrapUsername = flag.String("username", "", "Name of the Valkey user")
-	hashKeyPattern = flag.String("hash-key-pattern", "", "Pattern (glob style) of the HASH keys to be analyzed")
-	listKeyPattern = flag.String("list-key-pattern", "", "Pattern (glob style) of the LIST keys to be analyzed")
-	setKeyPattern = flag.String("set-key-pattern", "", "Pattern (glob style) of the SET keys to be analyzed")
-	zsetKeyPattern = flag.String("zset-key-pattern", "", "Pattern (glob style) of the SORTED SET keys to be analyzed")
-	fieldPattern = flag.String("field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
-	printOutput = flag.Bool("print-output", true, "Print output to stdout")
-	outFile = flag.String("output-file", "", "Output file name")
+	options = defaultOptions()
+	flag.StringVar(&options.Address, "address", options.Address, "Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster")
+	flag.StringVar(&options.Password, "password", "", "Password of the Valkey user")
+	flag.StringVar(&options.Username, "username", "", "Name of the Valkey user")
+	flag.StringVar(&options.HashKeyPattern, "hash-key-pattern", "", "Pattern (glob style) of the HASH keys to be analyzed")
+	flag.StringVar(&options.ListKeyPattern, "list-key-pattern", "", "Pattern (glob style) of the LIST keys to be analyzed")
+	flag.StringVar(&options.SetKeyPattern, "set-key-pattern", "", "Pattern (glob style) of the SET keys to be analyzed")
+	flag.StringVar(&options.ZSetKeyPattern, "zset-key-pattern", "", "Pattern (glob style) of the SORTED SET keys to be analyzed")
+	flag.StringVar(&options.FieldPattern, "field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
+	flag.BoolVar(&options.PrintOutput, "print-output", options.PrintOutput, "Print output to stdout")
+	flag.StringVar(&options.OutputFile, "output-file", "", "Output file name")
 	flagsInitialized = flag.CommandLine
 }
+
 func parseArguments() {
-	if *fieldPattern != "" {
-		fieldPatternRE = regexp.MustCompile(*fieldPattern)
+	if options.FieldPattern != "" {
+		options.FieldPatternRE = regexp.MustCompile(options.FieldPattern)
 	} else {
-		fieldPatternRE = nil
+		options.FieldPatternRE = nil
 	}
 }
 
@@ -227,6 +311,9 @@ func main() {
 	initFlags()
 	flag.Parse()
 	parseArguments()
-	v := makeValkeyNode(*bootstrapAddress)
-	analyzeCluster(v)
+	v := makeValkeyNode(options.Address)
+	if _, err := runClusterAnalysis(v); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

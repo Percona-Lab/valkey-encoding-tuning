@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -13,9 +14,15 @@ import (
 
 type ListNodeType int
 
+type listpackLimit struct {
+	nodeDivisionType ListNodeType
+	maxNodeSize      int64
+}
+
 const (
 	listMaxListpackSize = "list-max-listpack-size"
 	listCompressDepth   = "list-compress-depth"
+	listDt              = "list"
 )
 const (
 	Unknown ListNodeType = iota
@@ -30,13 +37,13 @@ type ListMetrics struct {
 	// for element count distribution, affecting the number of nodes if `list-max-listpack-size` is positive number
 	nodeDivisionType ListNodeType
 	tdigest          *tdigest.TDigest
-	objCount         int64
-	avgNodeCount     int64
-	maxNodeCount     int64
+	objCnt           int64
+	avgNodeCnt       int64
+	maxNodeCnt       int64
 	avgObjSize       int64
 	maxObjSize       int64
-	avgElementCount  int64
-	maxElementCount  int64
+	avgElementCnt    int64
+	maxElementCnt    int64
 }
 
 var optimizationLevel = map[string]int{
@@ -55,62 +62,25 @@ func makeListMetrics() ListMetrics {
 	return ListMetrics{tdigest: t}
 }
 
-func (v *ValkeyNode) getListNodeDivisionType() {
-	if strings.HasPrefix(v.Config[listMaxListpackSize], "-") {
-		v.ListMetrics.nodeDivisionType = BySize
-	} else {
-		v.ListMetrics.nodeDivisionType = ByElement
-	}
-}
-
 func (v *ValkeyNode) analyzeList() error {
-	ctx := context.Background()
-	client := v.getClient()
-	err := client.Do(ctx,
-		client.B().Readonly().Build(),
-	).Error()
+	limit, err := parseListpackLimit(v.Config[listMaxListpackSize])
 	if err != nil {
 		return err
 	}
-	v.getListNodeDivisionType()
+	v.ListMetrics.nodeDivisionType = limit.nodeDivisionType
 
-	var cursor uint64
-	for {
-		scanCmd := client.B().Scan().Cursor(cursor)
-		if *listKeyPattern != "" {
-			scanCmd.Match(*listKeyPattern)
-		}
-		scanCmd.Type("list")
-		resp := client.Do(
-			ctx,
-			scanCmd.Build(),
-		)
-		entry, err := resp.AsScanEntry()
-		if err != nil {
-			return err
-		}
-
-		for _, key := range entry.Elements {
-			err := v.analyzeListKey(key)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		cursor = entry.Cursor
-		if cursor == 0 {
-			break
-		}
-
-	}
-
-	return nil
+	return v.analyze(listDt, nil, v.analyzeListKey)
 }
 
 func (v *ValkeyNode) analyzeListKey(key string) error {
+	limit, err := parseListpackLimit(v.Config[listMaxListpackSize])
+	if err != nil {
+		return err
+	}
+
 	lm := &v.ListMetrics
-	oldCount := lm.objCount
-	lm.objCount++
+	oldCount := lm.objCnt
+	lm.objCnt++
 
 	ctx := context.Background()
 	client := v.getClient()
@@ -135,54 +105,68 @@ func (v *ValkeyNode) analyzeListKey(key string) error {
 	if err != nil {
 		return err
 	}
-	nodeCount, err := estimateListNodeCount(v.Config[listMaxListpackSize], count, ksize)
-	if err != nil {
-		return err
-	}
-	isMaxSizeByElementSize := strings.HasPrefix(v.Config[listMaxListpackSize], "-")
-	if isMaxSizeByElementSize {
+	nodeCount := estimateListNodeCountFromLimit(limit, count, ksize)
+	if limit.nodeDivisionType == BySize {
 		lm.tdigest.Add(float64(ksize))
 	} else {
 		lm.tdigest.Add(float64(count))
 	}
-	if lm.maxNodeCount < nodeCount {
-		lm.maxNodeCount = nodeCount
-	}
-	lm.avgNodeCount = (nodeCount + (lm.avgNodeCount * oldCount)) / lm.objCount
+	lm.maxNodeCnt = max(lm.maxNodeCnt, nodeCount)
+	lm.avgNodeCnt = (nodeCount + (lm.avgNodeCnt * oldCount)) / lm.objCnt
 
-	if lm.maxObjSize < ksize {
-		lm.maxObjSize = ksize
-	}
-	lm.avgObjSize = (ksize + lm.avgObjSize*oldCount) / lm.objCount
+	lm.maxObjSize = max(lm.maxObjSize, ksize)
+	lm.avgObjSize = (ksize + lm.avgObjSize*oldCount) / lm.objCnt
 
-	if lm.maxElementCount < count {
-		lm.maxElementCount = count
-	}
-	lm.avgElementCount = (count + lm.avgElementCount*oldCount) / lm.objCount
+	lm.maxElementCnt = max(lm.maxElementCnt, count)
+	lm.avgElementCnt = (count + lm.avgElementCnt*oldCount) / lm.objCnt
 
 	return nil
 }
 
+func parseListpackLimit(configValue string) (listpackLimit, error) {
+	if strings.HasPrefix(configValue, "-") {
+		maxNodeSize, ok := optimizationLevel[configValue]
+		if !ok {
+			return listpackLimit{}, fmt.Errorf("unsupported %s optimization level %q", listMaxListpackSize, configValue)
+		}
+		if maxNodeSize <= 0 {
+			return listpackLimit{}, fmt.Errorf("%s optimization level %q must be positive", listMaxListpackSize, configValue)
+		}
+		return listpackLimit{
+			nodeDivisionType: BySize,
+			maxNodeSize:      int64(maxNodeSize),
+		}, nil
+	}
+
+	maxElementCount, err := strconv.Atoi(configValue)
+	if err != nil {
+		return listpackLimit{}, err
+	}
+	if maxElementCount <= 0 {
+		return listpackLimit{}, errors.New("positive list-max-listpack-size must be greater than zero")
+	}
+	return listpackLimit{
+		nodeDivisionType: ByElement,
+		maxNodeSize:      int64(maxElementCount),
+	}, nil
+}
+
 func estimateListNodeCount(configValue string, elementCount, objectSize int64) (int64, error) {
-	var nodeCount int64
+	limit, err := parseListpackLimit(configValue)
+	if err != nil {
+		return -1, err
+	}
+	return estimateListNodeCountFromLimit(limit, elementCount, objectSize), nil
+}
+
+func estimateListNodeCountFromLimit(limit listpackLimit, elementCount, objectSize int64) int64 {
 	var elementSum int64
-	var maxNodeSize int
-	var err error
-	// List datatype create new node depending on the number of element per node, or node size
-	isMaxSizeByElementSize := strings.HasPrefix(configValue, "-")
-	if isMaxSizeByElementSize {
-		maxNodeSize = optimizationLevel[configValue]
+	if limit.nodeDivisionType == BySize {
 		elementSum = objectSize
 	} else {
-		maxNodeSize, err = strconv.Atoi(configValue)
-		if err != nil {
-			return -1, err
-		}
 		elementSum = elementCount
 	}
-	nodeCount = int64(math.Ceil(float64(elementSum) / float64(maxNodeSize)))
-
-	return nodeCount, nil
+	return int64(math.Ceil(float64(elementSum) / float64(limit.maxNodeSize)))
 }
 
 func (v *ValkeyNode) getListDatatypeAnalysis(analysis *Analysis) {
@@ -198,14 +182,14 @@ func (v *ValkeyNode) getListDatatypeAnalysis(analysis *Analysis) {
 	analysis.Config[listMaxListpackSize] = v.Config[listMaxListpackSize]
 	analysis.Config[listCompressDepth] = v.Config[listCompressDepth]
 
-	analysis.Metrics["list"] = map[string]any{
-		"object_count":                 lm.objCount,
-		"estimated_largest_node_count": lm.maxNodeCount,
-		"estimated_avg_node_count":     lm.avgNodeCount,
-		"max_element_count":            lm.maxElementCount,
-		"avg_element_count":            lm.avgElementCount,
-		"size_distribution_type":       sizeDistrType,
-		"distribution":                 quantileDistribution(lm.tdigest),
+	analysis.Metrics[listDt] = map[string]any{
+		kObjCnt:        lm.objCnt,
+		kMaxNodeCnt:    lm.maxNodeCnt,
+		kAvgNodeCnt:    lm.avgNodeCnt,
+		kMaxElementCnt: lm.maxElementCnt,
+		kAvgElementCnt: lm.avgElementCnt,
+		kSizeDistrType: sizeDistrType,
+		kDistribution:  quantileDistribution(lm.tdigest),
 	}
 }
 func (lm *ListMetrics) updateListStatistics(node *ListMetrics) {
@@ -218,19 +202,16 @@ func (lm *ListMetrics) updateListStatistics(node *ListMetrics) {
 		// init value
 		lm.nodeDivisionType = node.nodeDivisionType
 	}
-	objCount := (lm.objCount + node.objCount)
+	objCount := (lm.objCnt + node.objCnt)
 	if objCount == 0 {
 		return
 	}
-	lm.avgObjSize = (lm.avgObjSize*lm.objCount + node.avgObjSize*lm.objCount) / objCount
-	lm.avgElementCount = (lm.avgElementCount*lm.objCount + node.avgElementCount*node.objCount) / objCount
-	lm.objCount = objCount
-	if lm.maxNodeCount < node.maxNodeCount {
-		lm.maxNodeCount = node.maxNodeCount
-	}
-	if lm.maxElementCount < node.maxElementCount {
-		lm.maxElementCount = node.maxElementCount
-	}
+	lm.avgNodeCnt = (lm.avgNodeCnt*lm.objCnt + node.avgNodeCnt*node.objCnt) / objCount
+	lm.avgObjSize = (lm.avgObjSize*lm.objCnt + node.avgObjSize*node.objCnt) / objCount
+	lm.avgElementCnt = (lm.avgElementCnt*lm.objCnt + node.avgElementCnt*node.objCnt) / objCount
+	lm.objCnt = objCount
+	lm.maxNodeCnt = max(lm.maxNodeCnt, node.maxNodeCnt)
+	lm.maxObjSize = max(lm.maxObjSize, node.maxObjSize)
+	lm.maxElementCnt = max(lm.maxElementCnt, node.maxElementCnt)
 	lm.tdigest.Merge(node.tdigest)
-
 }

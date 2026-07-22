@@ -31,32 +31,17 @@ func initTestFlags(t *testing.T) {
 	t.Helper()
 
 	oldCommandLine := flag.CommandLine
-	oldBootstrapAddress := bootstrapAddress
-	oldBootstrapUsername := bootstrapUsername
-	oldBootstrapPassword := bootstrapPassword
-	oldKeyPattern := hashKeyPattern
-	oldListKeyPattern := listKeyPattern
-	oldFieldPattern := fieldPattern
-	oldFieldPatternRE := fieldPatternRE
-	oldPrintOutput := printOutput
+	oldOptions := options
 	oldFlagsInitialized := flagsInitialized
 
 	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)
 	flagsInitialized = nil
-	fieldPatternRE = nil
 	initFlags()
 
 	t.Cleanup(func() {
 		flag.CommandLine = oldCommandLine
-		bootstrapAddress = oldBootstrapAddress
-		bootstrapUsername = oldBootstrapUsername
-		bootstrapPassword = oldBootstrapPassword
-		hashKeyPattern = oldKeyPattern
-		listKeyPattern = oldListKeyPattern
-		fieldPattern = oldFieldPattern
-		fieldPatternRE = oldFieldPatternRE
-		printOutput = oldPrintOutput
+		options = oldOptions
 		flagsInitialized = oldFlagsInitialized
 	})
 }
@@ -164,7 +149,7 @@ func TestAnalyzeCluster(t *testing.T) {
 		parseArguments()
 
 		cs := analyzeCluster(makeValkeyNode(address))
-		g.Expect(cs.HashMetrics.objCount).To(Equal(hashKeysCount))
+		g.Expect(cs.HashMetrics.objCnt).To(Equal(hashKeysCount))
 
 	})
 	t.Cleanup(func() {
@@ -190,9 +175,10 @@ func TestScanCluster(t *testing.T) {
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
-		nodes := getClusterNodes(ValkeyNode{
+		nodes, err := getClusterNodes(ValkeyNode{
 			Address: address,
 		})
+		g.Expect(err).To(BeNil())
 		dbSizeKeys := 0
 		for _, n := range nodes {
 			nClient := createClient(n.Address)

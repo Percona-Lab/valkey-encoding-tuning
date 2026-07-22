@@ -48,8 +48,8 @@ func TestMakeZSetMetricsInitializesTDigest(t *testing.T) {
 
 	metrics := makeZSetMetrics()
 
-	g.Expect(metrics.tdigest).NotTo(BeNil())
-	g.Expect(metrics.tdigest.Count()).To(Equal(uint64(0)))
+	g.Expect(metrics.elementStats.tdigest).NotTo(BeNil())
+	g.Expect(metrics.elementStats.tdigest.Count()).To(Equal(uint64(0)))
 }
 
 func TestAnalyzeZSetScansOnlyZSetKeys(t *testing.T) {
@@ -64,7 +64,7 @@ func TestAnalyzeZSetScansOnlyZSetKeys(t *testing.T) {
 	g.Expect(func() {
 		g.Expect(v.analyzeZSet()).To(Succeed())
 	}).NotTo(Panic())
-	g.Expect(v.ZSetMetrics.objCount).To(Equal(2))
+	g.Expect(v.ZSetMetrics.objCnt).To(Equal(2))
 }
 
 func TestAnalyzeZSetWithKeyFilterMatchedPattern(t *testing.T) {
@@ -78,7 +78,7 @@ func TestAnalyzeZSetWithKeyFilterMatchedPattern(t *testing.T) {
 	zaddTestZSet(t, client, "zset:other:1", "e")
 
 	g.Expect(v.analyzeZSet()).To(Succeed())
-	g.Expect(v.ZSetMetrics.objCount).To(Equal(2))
+	g.Expect(v.ZSetMetrics.objCnt).To(Equal(2))
 }
 
 func TestAnalyzeZSetWithKeyFilterNotMatchingPattern(t *testing.T) {
@@ -91,7 +91,7 @@ func TestAnalyzeZSetWithKeyFilterNotMatchingPattern(t *testing.T) {
 	zaddTestZSet(t, client, "zset:2", "b")
 
 	g.Expect(v.analyzeZSet()).To(Succeed())
-	g.Expect(v.ZSetMetrics.objCount).To(Equal(0))
+	g.Expect(v.ZSetMetrics.objCnt).To(Equal(0))
 }
 
 func TestAnalyzeZSetMembersUpdatesMemberMetrics(t *testing.T) {
@@ -105,11 +105,11 @@ func TestAnalyzeZSetMembersUpdatesMemberMetrics(t *testing.T) {
 
 	g.Expect(v.analyzeZSetMembers("zset:1")).To(Succeed())
 
-	g.Expect(v.ZSetMetrics.memberCount).To(Equal(4))
-	g.Expect(v.ZSetMetrics.maxFieldSize).To(Equal(len(longMember)))
-	g.Expect(v.ZSetMetrics.maxField).To(Equal("zset:1." + longMember))
-	g.Expect(v.ZSetMetrics.avgFieldSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
-	g.Expect(v.ZSetMetrics.tdigest.Count()).To(Equal(uint64(4)))
+	g.Expect(v.ZSetMetrics.elementStats.count).To(Equal(4))
+	g.Expect(v.ZSetMetrics.elementStats.maxSize).To(Equal(len(longMember)))
+	g.Expect(v.ZSetMetrics.elementStats.maxItem).To(Equal("zset:1." + longMember))
+	g.Expect(v.ZSetMetrics.elementStats.avgSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
+	g.Expect(v.ZSetMetrics.elementStats.tdigest.Count()).To(Equal(uint64(4)))
 }
 
 func TestAnalyzeZSetMembersCountsSkiplistCandidates(t *testing.T) {
@@ -120,7 +120,7 @@ func TestAnalyzeZSetMembersCountsSkiplistCandidates(t *testing.T) {
 
 	g.Expect(v.analyzeZSetMembers("zset:1")).To(Succeed())
 
-	g.Expect(v.ZSetMetrics.skipListCount).To(Equal(uint64(1)))
+	g.Expect(v.ZSetMetrics.skipListCnt).To(Equal(uint64(1)))
 }
 
 func TestAnalyzeZSetMembersReturnsErrorForInvalidZSetMaxListpackValue(t *testing.T) {
@@ -139,12 +139,12 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 		zsetMaxListpackValue:   "64",
 		zsetMaxListpackEntries: "128",
 	}
-	v.ZSetMetrics.objCount = 1
-	v.ZSetMetrics.memberCount = 2
-	v.ZSetMetrics.skipListCount = 1
-	v.ZSetMetrics.maxField = "zset:1.large"
-	v.ZSetMetrics.maxFieldSize = 5
-	v.ZSetMetrics.avgFieldSize = 3
+	v.ZSetMetrics.objCnt = 1
+	v.ZSetMetrics.elementStats.count = 2
+	v.ZSetMetrics.skipListCnt = 1
+	v.ZSetMetrics.elementStats.maxItem = "zset:1.large"
+	v.ZSetMetrics.elementStats.maxSize = 5
+	v.ZSetMetrics.elementStats.avgSize = 3
 
 	var analysis Analysis
 	v.getZSetDatatypeAnalysis(&analysis)
@@ -157,42 +157,42 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	if !ok {
 		return
 	}
-	g.Expect(zsetMetrics["object_count"]).To(Equal(1))
-	g.Expect(zsetMetrics["items_count"]).To(Equal(2))
-	g.Expect(zsetMetrics["skiplist_key_count"]).To(Equal(uint64(1)))
-	g.Expect(zsetMetrics["largest_field"]).To(Equal("zset:1.large"))
-	g.Expect(zsetMetrics["largest_field_size"]).To(Equal(5))
-	g.Expect(zsetMetrics["avg_field_size"]).To(Equal(float64(3)))
-	g.Expect(zsetMetrics["distribution"]).To(HaveLen(10))
+	g.Expect(zsetMetrics[kObjCnt]).To(Equal(1))
+	g.Expect(zsetMetrics[kElementsCnt]).To(Equal(2))
+	g.Expect(zsetMetrics[kSlKeyCnt]).To(Equal(uint64(1)))
+	g.Expect(zsetMetrics[kMaxElement]).To(Equal("zset:1.large"))
+	g.Expect(zsetMetrics[kMaxElementSize]).To(Equal(5))
+	g.Expect(zsetMetrics[kAvgElementSize]).To(Equal(float64(3)))
+	g.Expect(zsetMetrics[kDistribution]).To(HaveLen(10))
 }
 
 func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	g := NewWithT(t)
 	cluster := makeZSetMetrics()
-	cluster.objCount = 1
-	cluster.memberCount = 2
-	cluster.avgFieldSize = 2
-	cluster.skipListCount = 1
-	cluster.maxField = "zset:1.small"
-	cluster.maxFieldSize = 5
-	cluster.tdigest.Add(2)
+	cluster.objCnt = 1
+	cluster.elementStats.count = 2
+	cluster.elementStats.avgSize = 2
+	cluster.skipListCnt = 1
+	cluster.elementStats.maxItem = "zset:1.small"
+	cluster.elementStats.maxSize = 5
+	cluster.elementStats.tdigest.Add(2)
 
 	node := makeZSetMetrics()
-	node.objCount = 2
-	node.memberCount = 3
-	node.avgFieldSize = 6
-	node.skipListCount = 2
-	node.maxField = "zset:2.large"
-	node.maxFieldSize = 12
-	node.tdigest.Add(6)
+	node.objCnt = 2
+	node.elementStats.count = 3
+	node.elementStats.avgSize = 6
+	node.skipListCnt = 2
+	node.elementStats.maxItem = "zset:2.large"
+	node.elementStats.maxSize = 12
+	node.elementStats.tdigest.Add(6)
 
 	cluster.updateZSetStatistics(&node)
 
-	g.Expect(cluster.objCount).To(Equal(3))
-	g.Expect(cluster.memberCount).To(Equal(5))
-	g.Expect(cluster.avgFieldSize).To(Equal(4.4))
-	g.Expect(cluster.skipListCount).To(Equal(uint64(3)))
-	g.Expect(cluster.maxField).To(Equal("zset:2.large"))
-	g.Expect(cluster.maxFieldSize).To(Equal(12))
-	g.Expect(cluster.tdigest.Count()).To(Equal(uint64(2)))
+	g.Expect(cluster.objCnt).To(Equal(3))
+	g.Expect(cluster.elementStats.count).To(Equal(5))
+	g.Expect(cluster.elementStats.avgSize).To(Equal(4.4))
+	g.Expect(cluster.skipListCnt).To(Equal(uint64(3)))
+	g.Expect(cluster.elementStats.maxItem).To(Equal("zset:2.large"))
+	g.Expect(cluster.elementStats.maxSize).To(Equal(12))
+	g.Expect(cluster.elementStats.tdigest.Count()).To(Equal(uint64(2)))
 }
