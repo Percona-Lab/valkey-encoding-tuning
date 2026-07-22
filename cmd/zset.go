@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-
-	"github.com/caio/go-tdigest/v5"
 )
 
 const (
@@ -15,21 +13,13 @@ const (
 )
 
 type ZSetMetrics struct {
-	tdigest        *tdigest.TDigest
-	objCnt         int
-	elementCnt     int
-	skipListCnt    uint64
-	maxElement     string
-	avgElementSize float64
-	maxElementSize int
+	elementStats sizeStats
+	objCnt       int
+	skipListCnt  uint64
 }
 
 func makeZSetMetrics() ZSetMetrics {
-	t, err := tdigest.New()
-	if err != nil {
-		panic(err)
-	}
-	return ZSetMetrics{tdigest: t}
+	return ZSetMetrics{elementStats: makeSizeStats()}
 }
 
 func (v *ValkeyNode) analyzeZSet() error {
@@ -71,22 +61,10 @@ func (v *ValkeyNode) analyzeZSetMembers(zset string) error {
 		if err != nil {
 			return err
 		}
-		eleCnt := 0
-		fTotalSize := 0
 		for i := 0; i < len(entry.Elements); i++ {
-			eleCnt++
 			fSize := len(entry.Elements[i])
-			metrics.tdigest.Add(float64(fSize))
-			fTotalSize += fSize
+			metrics.elementStats.add(fmt.Sprintf("%s.%s", zset, entry.Elements[i]), fSize)
 			isHashtable = fSize >= maxLpSize
-			if fSize > metrics.maxElementSize {
-				metrics.maxElementSize = fSize
-				metrics.maxElement = fmt.Sprintf("%s.%s", zset, entry.Elements[i])
-			}
-		}
-		if eleCnt > 0 {
-			metrics.avgElementSize = float64((fTotalSize + int(float64(metrics.elementCnt)*metrics.avgElementSize)) / (metrics.elementCnt + eleCnt))
-			metrics.elementCnt += eleCnt
 		}
 		cursor = entry.Cursor
 	}
@@ -104,24 +82,16 @@ func (v *ValkeyNode) getZSetDatatypeAnalysis(analysis *Analysis) {
 	analysis.Metrics[zsetDt] = map[string]any{
 		kObjCnt:         metrics.objCnt,
 		kSlKeyCnt:       metrics.skipListCnt,
-		kElementsCnt:    metrics.elementCnt,
-		kMaxElement:     metrics.maxElement,
-		kMaxElementSize: metrics.maxElementSize,
-		kAvgElementSize: metrics.avgElementSize,
-		kDistribution:   quantileDistribution(metrics.tdigest),
+		kElementsCnt:    metrics.elementStats.count,
+		kMaxElement:     metrics.elementStats.maxItem,
+		kMaxElementSize: metrics.elementStats.maxSize,
+		kAvgElementSize: metrics.elementStats.avgSize,
+		kDistribution:   quantileDistribution(metrics.elementStats.tdigest),
 	}
 }
 
 func (zm *ZSetMetrics) updateZSetStatistics(node *ZSetMetrics) {
-	runningTotalField := (zm.elementCnt + node.elementCnt)
-	runningTotalFieldSize := (float64(zm.elementCnt*int(zm.avgElementSize)) + float64(node.elementCnt*int(node.avgElementSize)))
-	zm.avgElementSize = float64(runningTotalFieldSize / float64(runningTotalField))
-	zm.elementCnt = runningTotalField
-	if node.maxElementSize > zm.maxElementSize {
-		zm.maxElementSize = node.maxElementSize
-		zm.maxElement = node.maxElement
-	}
+	zm.elementStats.merge(&node.elementStats)
 	zm.skipListCnt += node.skipListCnt
 	zm.objCnt += node.objCnt
-	zm.tdigest.Merge(node.tdigest)
 }
