@@ -124,8 +124,10 @@ func (v *ValkeyNode) scan(dtype string, cursor uint64) (valkey.ScanEntry, error)
 
 func (v *ValkeyNode) analyze(db int64, dtype string, countKeys func(int), analyzeKey func(string) error) error {
 	var cursor uint64
-	// analyze keys in specific DB
-	v.getClient().B().Select().Index(db)
+	// A dedicated client is needed because SELECT state is connection-specific and
+	// cannot be safely changed with a standalone command on a multiplexed client.
+	v.Close()
+	v.Client = createClientWithDatabase(v.Address, v.opts(), db)
 	for ok := true; ok; ok = (cursor != 0) {
 		entry, err := v.scan(dtype, cursor)
 		if err != nil {

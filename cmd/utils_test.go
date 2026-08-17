@@ -17,7 +17,7 @@ func TestGetServerInfo(t *testing.T) {
 		address = createValkeyInstance(false)
 		g.Eventually(address).To(BeAnExistingFile())
 		client = createClient(address)
-		generateTestData(client, hashKeysCount)
+		generateTestData(t, address, 0, hashKeysCount)
 	}) {
 		return
 	}

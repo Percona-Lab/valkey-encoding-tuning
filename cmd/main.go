@@ -74,6 +74,10 @@ func createClient(address string) valkey.Client {
 }
 
 func createClientWithOptions(address string, opts *Options) valkey.Client {
+	return createClientWithDatabase(address, opts, 0)
+}
+
+func createClientWithDatabase(address string, opts *Options, db int64) valkey.Client {
 	var clientOption valkey.ClientOption
 	if strings.Contains(address, ":") {
 		clientOption = valkey.ClientOption{
@@ -90,6 +94,7 @@ func createClientWithOptions(address string, opts *Options) valkey.Client {
 	if opts != nil && opts.Password != "" {
 		clientOption.Password = opts.Password
 	}
+	clientOption.SelectDB = int(db)
 	client, err := valkey.NewClient(clientOption)
 	if err != nil {
 		panic(err)
@@ -152,8 +157,7 @@ func analyzeClusterData(bootstrapNode ValkeyNode) ([]clusterAnalysisResult, erro
 		return nil, err
 	}
 	isCluster := len(nodes) > 1
-	// have at least 1 result (db0)
-	results := make([]clusterAnalysisResult, 1)
+	results := make([]clusterAnalysisResult, 0, len(options.Databases))
 	for _, db := range options.Databases {
 		analyses := make([]Analysis, 0)
 		cs := makeValkeyNode("")

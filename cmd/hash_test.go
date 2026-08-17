@@ -16,7 +16,7 @@ func setupHashTestNode(t *testing.T, hashKeysCount int) ValkeyNode {
 	setTestFlag(t, "username", "default")
 	setTestFlag(t, "password", defaultPassword)
 	client := createClient(address)
-	generateTestData(client, hashKeysCount)
+	generateTestData(t, address, 0, hashKeysCount)
 
 	v := makeValkeyNode(address)
 	t.Cleanup(func() {
@@ -43,7 +43,7 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 	g := NewWithT(t)
 	v := setupHashTestNode(t, hashKeysCount)
 
-	setTestFlag(t, "hash-key-pattern", "item*")
+	setTestFlag(t, "hash-key-pattern", "{db0}:item*")
 	setTestFlag(t, "print-output", "false")
 	parseArguments()
 
