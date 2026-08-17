@@ -225,7 +225,7 @@ func analyzeNode(v *ValkeyNode, db int64) (Analysis, error) {
 }
 
 func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
-	fmt.Printf("# DB %d Analysis", output.Database)
+	fmt.Printf("# DB %d Analysis\n", output.Database)
 	fmt.Println("## Hash Datatype")
 	for _, analysis := range output.Nodes {
 		fmt.Println(analysis.renderHashMarkdown())

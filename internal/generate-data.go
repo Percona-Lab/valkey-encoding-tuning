@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 
 	"github.com/go-faker/faker/v4"
 	"github.com/valkey-io/valkey-go"
@@ -28,12 +30,20 @@ func generateTestData(client valkey.Client, entriesCount int) {
 }
 
 func main() {
+	args := os.Args[1:]
+	db, err := strconv.Atoi(args[0])
+	if err != nil {
+		panic(err)
+	}
 	co := valkey.ClientOption{
-		InitAddress: []string{"localhost:30001"},
+		SelectDB:    db,
+		InitAddress: []string{"localhost:" + args[1]},
+
 		// Username: "default",
 		// Password: "",
 	}
 	client, err := valkey.NewClient(co)
+
 	if err != nil {
 		panic(err)
 	}
