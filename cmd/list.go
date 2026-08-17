@@ -62,14 +62,14 @@ func makeListMetrics() ListMetrics {
 	return ListMetrics{tdigest: t}
 }
 
-func (v *ValkeyNode) analyzeList() error {
+func (v *ValkeyNode) analyzeList(db int64) error {
 	limit, err := parseListpackLimit(v.Config[listMaxListpackSize])
 	if err != nil {
 		return err
 	}
 	v.ListMetrics.nodeDivisionType = limit.nodeDivisionType
 
-	return v.analyze(listDt, nil, v.analyzeListKey)
+	return v.analyze(db, listDt, nil, v.analyzeListKey)
 }
 
 func (v *ValkeyNode) analyzeListKey(key string) error {

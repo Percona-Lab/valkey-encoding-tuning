@@ -122,8 +122,10 @@ func (v *ValkeyNode) scan(dtype string, cursor uint64) (valkey.ScanEntry, error)
 	return resp.AsScanEntry()
 }
 
-func (v *ValkeyNode) analyze(dtype string, countKeys func(int), analyzeKey func(string) error) error {
+func (v *ValkeyNode) analyze(db int64, dtype string, countKeys func(int), analyzeKey func(string) error) error {
 	var cursor uint64
+	// analyze keys in specific DB
+	v.getClient().B().Select().Index(db)
 	for ok := true; ok; ok = (cursor != 0) {
 		entry, err := v.scan(dtype, cursor)
 		if err != nil {

@@ -23,8 +23,8 @@ func makeSetMetrics() SetMetrics {
 	return SetMetrics{elementStats: makeSizeStats()}
 }
 
-func (v *ValkeyNode) analyzeSet() error {
-	return v.analyze(setDt,
+func (v *ValkeyNode) analyzeSet(db int64) error {
+	return v.analyze(db, setDt,
 		func(count int) {
 			v.SetMetrics.objCnt += count
 		},

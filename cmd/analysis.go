@@ -58,8 +58,9 @@ type Analysis struct {
 }
 
 type AnalysisOutput struct {
-	Nodes   []Analysis `json:"nodes"`
-	Cluster *Analysis  `json:"cluster,omitempty"`
+	Database int64
+	Nodes    []Analysis `json:"nodes"`
+	Cluster  *Analysis  `json:"cluster,omitempty"`
 }
 
 type quantiler interface {

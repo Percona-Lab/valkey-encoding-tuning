@@ -1,4 +1,5 @@
 # valkey-encoding-tuning
+
 Valkey (and Redis) internally encodes hash keys as a [listpack](https://github.com/antirez/listpack/blob/master/listpack.md), which is very memory-efficient. But, if a field in the hash exceeded the `hash-max-listpack-value` (by default, 64 characters), then it will be encoded as a hashtable instead.
 
 This tool will scan/analyze the whole Valkey dataset, to calculate the size statistics for Valkey/Redis datatypes (hashes, lists, sets, zsets) , helping the administrators to determine the optimal value for encoding hash objects.
@@ -44,6 +45,7 @@ go run ./cmd/... [flags]
 ```
 
 ## Unit tests
+
 To run the unit tests
 
 ```bash
@@ -58,6 +60,7 @@ go run ./cmd/... \
   --username=default \
   --password=hello-world
 ```
+
 Sample output:
 
 ```markdown

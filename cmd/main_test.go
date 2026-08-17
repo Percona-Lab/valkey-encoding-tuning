@@ -145,11 +145,12 @@ func TestAnalyzeCluster(t *testing.T) {
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
+		setTestFlag(t, "database", "0")
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 
-		cs := analyzeCluster(makeValkeyNode(address))
-		g.Expect(cs.HashMetrics.objCnt).To(Equal(hashKeysCount))
+		summaries := analyzeCluster(makeValkeyNode(address))
+		g.Expect(summaries[0].HashMetrics.objCnt).To(Equal(hashKeysCount))
 
 	})
 	t.Cleanup(func() {

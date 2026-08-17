@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/valkey-io/valkey-go"
@@ -32,6 +34,7 @@ type Options struct {
 	FieldPatternRE *regexp.Regexp
 	PrintOutput    bool
 	OutputFile     string
+	Databases      []int64
 }
 
 type ValkeyNode struct {
@@ -137,73 +140,80 @@ func getClusterNodes(bootstrapNode ValkeyNode) ([]ValkeyNode, error) {
 }
 
 type clusterAnalysisResult struct {
+	Database  int64
 	Summary   ValkeyNode
 	Output    AnalysisOutput
 	IsCluster bool
 }
 
-func analyzeClusterData(bootstrapNode ValkeyNode) (clusterAnalysisResult, error) {
+func analyzeClusterData(bootstrapNode ValkeyNode) ([]clusterAnalysisResult, error) {
 	nodes, err := getClusterNodes(bootstrapNode)
 	if err != nil {
-		return clusterAnalysisResult{}, err
+		return nil, err
 	}
 	isCluster := len(nodes) > 1
-	analyses := make([]Analysis, 0)
+	// have at least 1 result (db0)
+	results := make([]clusterAnalysisResult, 1)
+	for _, db := range options.Databases {
+		analyses := make([]Analysis, 0)
+		cs := makeValkeyNode("")
+		for _, v := range nodes {
+			analysis, err := analyzeNode(&v, db)
+			if err != nil {
+				return nil, err
+			}
+			cs.HashMetrics.updateHashStatistics(&v.HashMetrics)
+			cs.ListMetrics.updateListStatistics(&v.ListMetrics)
+			cs.SetMetrics.updateSetStatistics(&v.SetMetrics)
+			cs.ZSetMetrics.updateZSetStatistics(&v.ZSetMetrics)
 
-	cs := makeValkeyNode("")
-	for _, v := range nodes {
-		analysis, err := analyzeNode(&v)
-		if err != nil {
-			return clusterAnalysisResult{}, err
+			analyses = append(analyses, analysis)
 		}
-		cs.HashMetrics.updateHashStatistics(&v.HashMetrics)
-		cs.ListMetrics.updateListStatistics(&v.ListMetrics)
-		cs.SetMetrics.updateSetStatistics(&v.SetMetrics)
-		cs.ZSetMetrics.updateZSetStatistics(&v.ZSetMetrics)
-
-		analyses = append(analyses, analysis)
+		var clusterAnalysis Analysis
+		if isCluster {
+			cs.getHashDatatypeAnalysis(&clusterAnalysis)
+			cs.getListDatatypeAnalysis(&clusterAnalysis)
+			cs.getSetDatatypeAnalysis(&clusterAnalysis)
+			cs.getZSetDatatypeAnalysis(&clusterAnalysis)
+		}
+		result := clusterAnalysisResult{
+			Database: db,
+			Summary:  cs,
+			Output: AnalysisOutput{
+				Database: db,
+				Nodes:    analyses,
+				Cluster:  &clusterAnalysis,
+			},
+			IsCluster: isCluster,
+		}
+		results = append(results, result)
 	}
-	var clusterAnalysis Analysis
-	if isCluster {
-		cs.getHashDatatypeAnalysis(&clusterAnalysis)
-		cs.getListDatatypeAnalysis(&clusterAnalysis)
-		cs.getSetDatatypeAnalysis(&clusterAnalysis)
-		cs.getZSetDatatypeAnalysis(&clusterAnalysis)
-	}
-
-	return clusterAnalysisResult{
-		Summary: cs,
-		Output: AnalysisOutput{
-			Nodes:   analyses,
-			Cluster: &clusterAnalysis,
-		},
-		IsCluster: isCluster,
-	}, nil
+	return results, nil
 }
 
-func analyzeNode(v *ValkeyNode) (Analysis, error) {
+func analyzeNode(v *ValkeyNode, db int64) (Analysis, error) {
 	if err := v.getNodeConfig(); err != nil {
 		return Analysis{}, fmt.Errorf("get config for node %s: %w", v.Address, err)
 	}
 
 	var analysis Analysis
-	if err := v.analyzeHash(); err != nil {
-		return Analysis{}, fmt.Errorf("analyze hash keys on node %s: %w", v.Address, err)
+	if err := v.analyzeHash(db); err != nil {
+		return Analysis{}, fmt.Errorf("analyze hash keys for database '%d' on node %s: %w", db, v.Address, err)
 	}
 	v.getHashDatatypeAnalysis(&analysis)
 
-	if err := v.analyzeList(); err != nil {
-		return Analysis{}, fmt.Errorf("analyze list keys on node %s: %w", v.Address, err)
+	if err := v.analyzeList(db); err != nil {
+		return Analysis{}, fmt.Errorf("analyze list keys for database '%d'  on node %s: %w", db, v.Address, err)
 	}
 	v.getListDatatypeAnalysis(&analysis)
 
-	if err := v.analyzeSet(); err != nil {
-		return Analysis{}, fmt.Errorf("analyze set keys on node %s: %w", v.Address, err)
+	if err := v.analyzeSet(db); err != nil {
+		return Analysis{}, fmt.Errorf("analyze set keys for database '%d' on node %s: %w", db, v.Address, err)
 	}
 	v.getSetDatatypeAnalysis(&analysis)
 
-	if err := v.analyzeZSet(); err != nil {
-		return Analysis{}, fmt.Errorf("analyze zset keys on node %s: %w", v.Address, err)
+	if err := v.analyzeZSet(db); err != nil {
+		return Analysis{}, fmt.Errorf("analyze zset keys for database '%d' on node %s: %w", db, v.Address, err)
 	}
 	v.getZSetDatatypeAnalysis(&analysis)
 
@@ -211,7 +221,8 @@ func analyzeNode(v *ValkeyNode) (Analysis, error) {
 }
 
 func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
-	fmt.Println("# Hash Datatype Analysis")
+	fmt.Printf("# DB %d Analysis", output.Database)
+	fmt.Println("## Hash Datatype")
 	for _, analysis := range output.Nodes {
 		fmt.Println(analysis.renderHashMarkdown())
 	}
@@ -219,7 +230,7 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 		fmt.Println(output.Cluster.renderHashMarkdown())
 	}
 
-	fmt.Println("# List Datatype Analysis")
+	fmt.Println("## List Datatype")
 	for _, analysis := range output.Nodes {
 		fmt.Println(analysis.renderListMarkdown())
 	}
@@ -227,7 +238,7 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 		fmt.Println(output.Cluster.renderListMarkdown())
 	}
 
-	fmt.Println("# Set Datatype Analysis")
+	fmt.Println("## Set Datatype")
 	for _, analysis := range output.Nodes {
 		fmt.Println(analysis.renderSetMarkdown())
 	}
@@ -235,7 +246,7 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 		fmt.Println(output.Cluster.renderSetMarkdown())
 	}
 
-	fmt.Println("# Sorted Set Datatype Analysis")
+	fmt.Println("## Sorted Set Datatype")
 	for _, analysis := range output.Nodes {
 		fmt.Println(analysis.renderZSetMarkdown())
 	}
@@ -251,27 +262,31 @@ func writeClusterAnalysis(opts *Options, output AnalysisOutput) error {
 	return writeJson(opts.OutputFile, output)
 }
 
-func runClusterAnalysis(bootstrapNode ValkeyNode) (ValkeyNode, error) {
-	result, err := analyzeClusterData(bootstrapNode)
+func runClusterAnalysis(bootstrapNode ValkeyNode) ([]ValkeyNode, error) {
+	results, err := analyzeClusterData(bootstrapNode)
 	if err != nil {
-		return ValkeyNode{}, err
+		return nil, err
 	}
+	output := make([]ValkeyNode, len(results))
 	bootstrapOptions := bootstrapNode.opts()
-	if bootstrapOptions.PrintOutput {
-		renderClusterAnalysis(result.Output, result.IsCluster)
+	for i, result := range results {
+		if bootstrapOptions.PrintOutput {
+			renderClusterAnalysis(result.Output, result.IsCluster)
+		}
+		if err := writeClusterAnalysis(bootstrapOptions, result.Output); err != nil {
+			return nil, err
+		}
+		output[i] = result.Summary
 	}
-	if err := writeClusterAnalysis(bootstrapOptions, result.Output); err != nil {
-		return ValkeyNode{}, err
-	}
-	return result.Summary, nil
+	return output, nil
 }
 
-func analyzeCluster(bootstrapNode ValkeyNode) ValkeyNode {
-	summary, err := runClusterAnalysis(bootstrapNode)
+func analyzeCluster(bootstrapNode ValkeyNode) []ValkeyNode {
+	summaries, err := runClusterAnalysis(bootstrapNode)
 	if err != nil {
 		panic(err)
 	}
-	return summary
+	return summaries
 }
 
 func defaultOptions() Options {
@@ -296,6 +311,25 @@ func initFlags() {
 	flag.StringVar(&options.FieldPattern, "field-pattern", "", "Pattern (regex style) of the hash fields to be analyzed")
 	flag.BoolVar(&options.PrintOutput, "print-output", options.PrintOutput, "Print output to stdout")
 	flag.StringVar(&options.OutputFile, "output-file", "", "Output file name")
+	flag.Func("database", "Comma-separated list of database to analyze, default to '0'", func(s string) error {
+		if strings.Contains(s, ",") {
+			dbs := strings.Split(s, ",")
+			for _, db := range dbs {
+				i, err := strconv.Atoi(db)
+				if err != nil {
+					return err
+				}
+				options.Databases = append(options.Databases, int64(i))
+			}
+		} else {
+			db, err := strconv.Atoi(s)
+			if err != nil {
+				return err
+			}
+			options.Databases = append(options.Databases, int64(db))
+		}
+		return nil
+	})
 	flagsInitialized = flag.CommandLine
 }
 
@@ -311,6 +345,13 @@ func main() {
 	initFlags()
 	flag.Parse()
 	parseArguments()
+	if len(options.Databases) == 0 {
+		options.Databases = []int64{0}
+	} else {
+		// remove duplicate & sort
+		slices.Sort(options.Databases)
+		options.Databases = slices.Compact(options.Databases)
+	}
 	v := makeValkeyNode(options.Address)
 	if _, err := runClusterAnalysis(v); err != nil {
 		fmt.Fprintln(os.Stderr, err)
