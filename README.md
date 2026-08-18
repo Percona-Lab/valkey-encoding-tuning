@@ -51,7 +51,7 @@ go run ./cmd/... [flags]
 - `field-pattern` Pattern (regex style) of the hash fields to be analyzed
 - `hash-key-pattern` Pattern (glob style) of the HASH keys to be analyzed
 - `list-key-pattern` Pattern (glob style) of the LIST keys to be analyzed
-- `output-file` Output file name
+- `output-file` Output file name (JSON format)
 - `password` Password of the Valkey user
 - `print-output` Print output to stdout (default true)
 - `set-key-pattern` Pattern (glob style) of the SET keys to be analyzed

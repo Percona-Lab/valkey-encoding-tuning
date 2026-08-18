@@ -259,11 +259,15 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 	}
 }
 
-func writeClusterAnalysis(opts *Options, output AnalysisOutput) error {
+func writeClusterAnalysis(opts *Options, output []clusterAnalysisResult) error {
 	if opts.OutputFile == "" {
 		return nil
 	}
-	return writeJson(opts.OutputFile, output)
+	data := make([]AnalysisOutput, len(output))
+	for i, o := range output {
+		data[i] = o.Output
+	}
+	return writeJson(opts.OutputFile, data)
 }
 
 func runClusterAnalysis(bootstrapNode ValkeyNode) ([]ValkeyNode, error) {
@@ -277,10 +281,10 @@ func runClusterAnalysis(bootstrapNode ValkeyNode) ([]ValkeyNode, error) {
 		if bootstrapOptions.PrintOutput {
 			renderClusterAnalysis(result.Output, result.IsCluster)
 		}
-		if err := writeClusterAnalysis(bootstrapOptions, result.Output); err != nil {
-			return nil, err
-		}
 		output[i] = result.Summary
+	}
+	if err := writeClusterAnalysis(bootstrapOptions, results); err != nil {
+		return nil, err
 	}
 	return output, nil
 }
