@@ -58,8 +58,9 @@ type Analysis struct {
 }
 
 type AnalysisOutput struct {
-	Nodes   []Analysis `json:"nodes"`
-	Cluster *Analysis  `json:"cluster,omitempty"`
+	Database int64
+	Nodes    []Analysis `json:"nodes"`
+	Cluster  *Analysis  `json:"cluster,omitempty"`
 }
 
 type quantiler interface {
@@ -95,10 +96,10 @@ func (a Analysis) datatypeMetrics(datatype string) map[string]any {
 func (a Analysis) renderHashMarkdown() string {
 	var sb strings.Builder
 	metrics := a.datatypeMetrics("hash")
-	fmt.Fprintf(&sb, "## Node %s\n", a.Address)
-	fmt.Fprintln(&sb, "### Config")
+	fmt.Fprintf(&sb, "### Node %s\n", a.Address)
+	fmt.Fprintln(&sb, "#### Config")
 	fmt.Fprintf(&sb, "- %s=%s\n", hashMaxListpack, a.Config[hashMaxListpack])
-	fmt.Fprintln(&sb, "### Analysis")
+	fmt.Fprintln(&sb, "#### Analysis")
 
 	objCount, _ := metrics[kObjCnt].(int)
 	if objCount == 0 {
@@ -121,11 +122,11 @@ func (a Analysis) renderHashMarkdown() string {
 func (a Analysis) renderListMarkdown() string {
 	var sb strings.Builder
 	metrics := a.datatypeMetrics("list")
-	fmt.Fprintf(&sb, "## Node %s\n", a.Address)
-	fmt.Fprintln(&sb, "### Config")
+	fmt.Fprintf(&sb, "### Node %s\n", a.Address)
+	fmt.Fprintln(&sb, "#### Config")
 	fmt.Fprintf(&sb, "- %s=%s\n", listMaxListpackSize, a.Config[listMaxListpackSize])
 	fmt.Fprintf(&sb, "- %s=%s\n", listCompressDepth, a.Config[listCompressDepth])
-	fmt.Fprintln(&sb, "### Analysis")
+	fmt.Fprintln(&sb, "#### Analysis")
 
 	objCount, _ := metrics[kObjCnt].(int64)
 	if objCount == 0 {
@@ -148,11 +149,11 @@ func (a Analysis) renderListMarkdown() string {
 func (a Analysis) renderSetMarkdown() string {
 	var sb strings.Builder
 	metrics := a.datatypeMetrics(setDt)
-	fmt.Fprintf(&sb, "## Node %s\n", a.Address)
-	fmt.Fprintln(&sb, "### Config")
+	fmt.Fprintf(&sb, "### Node %s\n", a.Address)
+	fmt.Fprintln(&sb, "#### Config")
 	fmt.Fprintf(&sb, "- %s=%s\n", setMaxListpackValue, a.Config[setMaxListpackValue])
 	fmt.Fprintf(&sb, "- %s=%s\n", setMaxListpackEntries, a.Config[setMaxListpackEntries])
-	fmt.Fprintln(&sb, "### Analysis")
+	fmt.Fprintln(&sb, "#### Analysis")
 
 	objCount, _ := metrics[kObjCnt].(int)
 	if objCount == 0 {
@@ -175,11 +176,11 @@ func (a Analysis) renderSetMarkdown() string {
 func (a Analysis) renderZSetMarkdown() string {
 	var sb strings.Builder
 	metrics := a.datatypeMetrics(zsetDt)
-	fmt.Fprintf(&sb, "## Node %s\n", a.Address)
-	fmt.Fprintln(&sb, "### Config")
+	fmt.Fprintf(&sb, "### Node %s\n", a.Address)
+	fmt.Fprintln(&sb, "#### Config")
 	fmt.Fprintf(&sb, "- %s=%s\n", zsetMaxListpackValue, a.Config[zsetMaxListpackValue])
 	fmt.Fprintf(&sb, "- %s=%s\n", zsetMaxListpackEntries, a.Config[zsetMaxListpackEntries])
-	fmt.Fprintln(&sb, "### Analysis")
+	fmt.Fprintln(&sb, "#### Analysis")
 
 	objCount, _ := metrics[kObjCnt].(int)
 	if objCount == 0 {

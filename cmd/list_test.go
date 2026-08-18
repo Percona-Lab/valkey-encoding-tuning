@@ -83,7 +83,7 @@ func TestAnalyzeListScansOnlyListKeys(t *testing.T) {
 	).Error()
 	g.Expect(err).To(BeNil())
 
-	g.Expect(v.analyzeList()).To(Succeed())
+	g.Expect(v.analyzeList(0)).To(Succeed())
 	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(2)))
 }
 
@@ -97,7 +97,7 @@ func TestAnalyzeListWithKeyFilterMatchedPattern(t *testing.T) {
 	rpushTestList(t, client, "list:matched:2", "b")
 	rpushTestList(t, client, "list:other:1", "c")
 
-	g.Expect(v.analyzeList()).To(Succeed())
+	g.Expect(v.analyzeList(0)).To(Succeed())
 	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(2)))
 }
 
@@ -110,7 +110,7 @@ func TestAnalyzeListWithKeyFilterNotMatchingPattern(t *testing.T) {
 	rpushTestList(t, client, "list:1", "a")
 	rpushTestList(t, client, "list:2", "b")
 
-	g.Expect(v.analyzeList()).To(Succeed())
+	g.Expect(v.analyzeList(0)).To(Succeed())
 	g.Expect(v.ListMetrics.objCnt).To(Equal(int64(0)))
 }
 

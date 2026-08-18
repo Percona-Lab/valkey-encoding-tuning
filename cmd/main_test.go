@@ -108,10 +108,16 @@ func createValkeyInstance(setPassword bool) string {
 	panic(fmt.Sprintf("valkey-server did not create socket %s within 5s\n%s", addr, string(logOutput)))
 }
 
-func generateTestData(client valkey.Client, entriesCount int) {
-	ctx := context.Background()
+func generateTestData(t *testing.T, address string, db int64, entriesCount int) {
+	t.Helper()
 
-	client.Do(ctx, client.B().Flushdb().Build())
+	ctx := context.Background()
+	client := createClientWithDatabase(address, &options, db)
+	t.Cleanup(client.Close)
+	if err := client.Do(ctx, client.B().Flushdb().Build()).Error(); err != nil {
+		t.Fatalf("flush database %d: %v", db, err)
+	}
+
 	for i := range entriesCount {
 		var dsc string
 		if v, _ := faker.RandomInt(1, 10); v[0] > 5 {
@@ -119,13 +125,14 @@ func generateTestData(client valkey.Client, entriesCount int) {
 		} else {
 			dsc = faker.Sentence()
 		}
-		cmd := client.B().Hset().Key(fmt.Sprintf("item:%d", i)).
+		cmd := client.B().Hset().Key(fmt.Sprintf("{db%d}:item:%d", db, i)).
 			FieldValue().FieldValue("name", faker.Word()).
 			FieldValue("description", dsc).
 			Build()
-		client.Do(ctx, cmd)
+		if err := client.Do(ctx, cmd).Error(); err != nil {
+			t.Fatalf("populate database %d: %v", db, err)
+		}
 	}
-
 }
 
 func TestAnalyzeCluster(t *testing.T) {
@@ -139,23 +146,63 @@ func TestAnalyzeCluster(t *testing.T) {
 		setTestFlag(t, "username", "default")
 		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
-		generateTestData(client, hashKeysCount)
+		generateTestData(t, address, 0, hashKeysCount)
 	}) {
 		return
 	}
 	t.Run("test", func(t *testing.T) {
 		g := NewWithT(t)
+		setTestFlag(t, "database", "0")
 		setTestFlag(t, "print-output", "false")
 		parseArguments()
 
-		cs := analyzeCluster(makeValkeyNode(address))
-		g.Expect(cs.HashMetrics.objCnt).To(Equal(hashKeysCount))
+		summaries := analyzeCluster(makeValkeyNode(address))
+		g.Expect(summaries[0].HashMetrics.objCnt).To(Equal(hashKeysCount))
 
 	})
 	t.Cleanup(func() {
 		cleanupValkeyInstance(address, client)
 	})
 
+}
+
+func TestAnalyzeClusterMultipleDatabases(t *testing.T) {
+	initTestFlags(t)
+
+	keyCounts := []int{7, 11, 13}
+	var address string
+	var client valkey.Client
+	if !t.Run("setup env", func(t *testing.T) {
+		address = createValkeyInstance(true)
+		setTestFlag(t, "username", "default")
+		setTestFlag(t, "password", defaultPassword)
+		client = createClient(address)
+		for db, keyCount := range keyCounts {
+			generateTestData(t, address, int64(db), keyCount)
+		}
+	}) {
+		return
+	}
+	t.Cleanup(func() {
+		cleanupValkeyInstance(address, client)
+	})
+
+	t.Run("analyzes each database independently", func(t *testing.T) {
+		g := NewWithT(t)
+		setTestFlag(t, "database", "0,1,2")
+		setTestFlag(t, "print-output", "false")
+		parseArguments()
+
+		results, err := analyzeClusterData(makeValkeyNode(address))
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(results).To(HaveLen(len(keyCounts)))
+		for db, keyCount := range keyCounts {
+			g.Expect(results[db].Database).To(Equal(int64(db)))
+			g.Expect(results[db].Summary.HashMetrics.objCnt).To(Equal(keyCount))
+			g.Expect(results[db].Summary.HashMetrics.fieldStats.maxItem).
+				To(HavePrefix(fmt.Sprintf("{db%d}", db)))
+		}
+	})
 }
 
 func TestScanCluster(t *testing.T) {
@@ -169,7 +216,7 @@ func TestScanCluster(t *testing.T) {
 		setTestFlag(t, "username", "default")
 		setTestFlag(t, "password", defaultPassword)
 		client = createClient(address)
-		generateTestData(client, totalKeys)
+		generateTestData(t, address, 0, totalKeys)
 	}) {
 		return
 	}

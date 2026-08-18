@@ -62,7 +62,7 @@ func TestAnalyzeZSetScansOnlyZSetKeys(t *testing.T) {
 	saddTestSet(t, client, "set:1", "a", "b")
 
 	g.Expect(func() {
-		g.Expect(v.analyzeZSet()).To(Succeed())
+		g.Expect(v.analyzeZSet(0)).To(Succeed())
 	}).NotTo(Panic())
 	g.Expect(v.ZSetMetrics.objCnt).To(Equal(2))
 }
@@ -77,7 +77,7 @@ func TestAnalyzeZSetWithKeyFilterMatchedPattern(t *testing.T) {
 	zaddTestZSet(t, client, "zset:matched:2", "c", "d")
 	zaddTestZSet(t, client, "zset:other:1", "e")
 
-	g.Expect(v.analyzeZSet()).To(Succeed())
+	g.Expect(v.analyzeZSet(0)).To(Succeed())
 	g.Expect(v.ZSetMetrics.objCnt).To(Equal(2))
 }
 
@@ -90,7 +90,7 @@ func TestAnalyzeZSetWithKeyFilterNotMatchingPattern(t *testing.T) {
 	zaddTestZSet(t, client, "zset:1", "a")
 	zaddTestZSet(t, client, "zset:2", "b")
 
-	g.Expect(v.analyzeZSet()).To(Succeed())
+	g.Expect(v.analyzeZSet(0)).To(Succeed())
 	g.Expect(v.ZSetMetrics.objCnt).To(Equal(0))
 }
 

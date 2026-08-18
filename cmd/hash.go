@@ -22,8 +22,8 @@ func makeHashMetrics() HashMetrics {
 	return HashMetrics{fieldStats: makeSizeStats()}
 }
 
-func (v *ValkeyNode) analyzeHash() error {
-	return v.analyze(hashDt,
+func (v *ValkeyNode) analyzeHash(db int64) error {
+	return v.analyze(db, hashDt,
 		func(count int) {
 			v.HashMetrics.objCnt += count
 		},

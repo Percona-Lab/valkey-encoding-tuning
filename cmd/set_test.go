@@ -62,7 +62,7 @@ func TestAnalyzeSetScansOnlySetKeys(t *testing.T) {
 	).Error()
 	g.Expect(err).To(BeNil())
 
-	g.Expect(v.analyzeSet()).To(Succeed())
+	g.Expect(v.analyzeSet(0)).To(Succeed())
 	g.Expect(v.SetMetrics.objCnt).To(Equal(2))
 }
 
@@ -76,7 +76,7 @@ func TestAnalyzeSetWithKeyFilterMatchedPattern(t *testing.T) {
 	saddTestSet(t, client, "set:matched:2", "c", "d")
 	saddTestSet(t, client, "set:other:1", "d")
 
-	g.Expect(v.analyzeSet()).To(Succeed())
+	g.Expect(v.analyzeSet(0)).To(Succeed())
 	g.Expect(v.SetMetrics.objCnt).To(Equal(2))
 }
 
@@ -89,7 +89,7 @@ func TestAnalyzeSetWithKeyFilterNotMatchingPattern(t *testing.T) {
 	saddTestSet(t, client, "set:1", "a")
 	saddTestSet(t, client, "set:2", "b")
 
-	g.Expect(v.analyzeSet()).To(Succeed())
+	g.Expect(v.analyzeSet(0)).To(Succeed())
 	g.Expect(v.SetMetrics.objCnt).To(Equal(0))
 }
 

@@ -16,7 +16,7 @@ func setupHashTestNode(t *testing.T, hashKeysCount int) ValkeyNode {
 	setTestFlag(t, "username", "default")
 	setTestFlag(t, "password", defaultPassword)
 	client := createClient(address)
-	generateTestData(client, hashKeysCount)
+	generateTestData(t, address, 0, hashKeysCount)
 
 	v := makeValkeyNode(address)
 	t.Cleanup(func() {
@@ -34,7 +34,7 @@ func TestAnalyzeNode(t *testing.T) {
 	parseArguments()
 
 	g.Expect(v.getNodeConfig()).To(Succeed())
-	g.Expect(v.analyzeHash()).To(Succeed())
+	g.Expect(v.analyzeHash(0)).To(Succeed())
 	g.Expect(v.HashMetrics.objCnt).To(Equal(hashKeysCount))
 }
 
@@ -43,12 +43,12 @@ func TestAnalyzeWithKeyFilterMatchedPattern(t *testing.T) {
 	g := NewWithT(t)
 	v := setupHashTestNode(t, hashKeysCount)
 
-	setTestFlag(t, "hash-key-pattern", "item*")
+	setTestFlag(t, "hash-key-pattern", "{db0}:item*")
 	setTestFlag(t, "print-output", "false")
 	parseArguments()
 
 	g.Expect(v.getNodeConfig()).To(Succeed())
-	g.Expect(v.analyzeHash()).To(Succeed())
+	g.Expect(v.analyzeHash(0)).To(Succeed())
 	g.Expect(v.HashMetrics.objCnt).To(Equal(hashKeysCount))
 }
 
@@ -62,7 +62,7 @@ func TestAnalyzeWithKeyFilterNotMatchingPattern(t *testing.T) {
 	parseArguments()
 	g.Expect((v.HashMetrics.objCnt)).To(Equal(0))
 
-	g.Expect(v.analyzeHash()).To(Succeed())
+	g.Expect(v.analyzeHash(0)).To(Succeed())
 	g.Expect((v.HashMetrics.objCnt)).To(Equal(0))
 }
 
@@ -75,7 +75,7 @@ func TestAnalyzeWithFieldFilterMatchedPattern(t *testing.T) {
 	setTestFlag(t, "print-output", "false")
 	parseArguments()
 	g.Expect(v.getNodeConfig()).To(Succeed())
-	g.Expect(v.analyzeHash()).To(Succeed())
+	g.Expect(v.analyzeHash(0)).To(Succeed())
 	g.Expect(v.HashMetrics.fieldStats.count).To(Equal(hashKeysCount * 2))
 	g.Expect(v.HashMetrics.fieldStats.maxItem).To(ContainSubstring(".name"))
 }
@@ -89,7 +89,7 @@ func TestAnalyzeWithFieldNotMatchingFilter(t *testing.T) {
 	setTestFlag(t, "print-output", "false")
 	parseArguments()
 	g.Expect(v.getNodeConfig()).To(Succeed())
-	g.Expect(v.analyzeHash()).To(Succeed())
+	g.Expect(v.analyzeHash(0)).To(Succeed())
 	g.Expect(v.HashMetrics.fieldStats.count).To(Equal(0))
 	g.Expect(v.HashMetrics.fieldStats.maxItem).To(BeEmpty())
 }

@@ -1,4 +1,5 @@
 # valkey-encoding-tuning
+
 Valkey (and Redis) internally encodes hash keys as a [listpack](https://github.com/antirez/listpack/blob/master/listpack.md), which is very memory-efficient. But, if a field in the hash exceeded the `hash-max-listpack-value` (by default, 64 characters), then it will be encoded as a hashtable instead.
 
 This tool will scan/analyze the whole Valkey dataset, to calculate the size statistics for Valkey/Redis datatypes (hashes, lists, sets, zsets) , helping the administrators to determine the optimal value for encoding hash objects.
@@ -43,7 +44,22 @@ Or directly:
 go run ./cmd/... [flags]
 ```
 
+### Available arguments
+
+- `address` Valkey node address to connect to, will automatically detect other nodes if it is part of a cluster, default to "127.0.0.1:6379"
+- `database` Comma-separated list of database to analyze, default to 0
+- `field-pattern` Pattern (regex style) of the hash fields to be analyzed
+- `hash-key-pattern` Pattern (glob style) of the HASH keys to be analyzed
+- `list-key-pattern` Pattern (glob style) of the LIST keys to be analyzed
+- `output-file` Output file name
+- `password` Password of the Valkey user
+- `print-output` Print output to stdout (default true)
+- `set-key-pattern` Pattern (glob style) of the SET keys to be analyzed
+- `username` Name of the Valkey user
+- `zset-key-pattern` Pattern (glob style) of the SORTED SET keys to be analyzed
+
 ## Unit tests
+
 To run the unit tests
 
 ```bash
@@ -58,92 +74,53 @@ go run ./cmd/... \
   --username=default \
   --password=hello-world
 ```
+
 Sample output:
 
 ```markdown
-# Hash Datatype Analysis
-## Node 127.0.0.1:30001
-### Config
+# DB 0 Analysis
+## Hash Datatype
+### Node 127.0.0.1:6379
+#### Config
 - hash-max-listpack-value=64
-### Analysis
-- hashtable keys found: 1552/3328 (46.63% of all hash keys)
-- hash fields count: 6656
-- largest hash field: item:6720.description, size:482 
-- avg field size: 13.00
+#### Analysis
+- hashtable keys found: 4493/10000 (44.93% of all hash keys)
+- hash fields count: 40000
+- largest hash field: item:8269.description (field value), size:485 
+- avg field size: 38.00
 - hash fields' size distribution:
-+ Quartile 1 (P25): 5.00
-+ Quartile 2 (P50): 19.66
-+ Quartile 3 (P75): 51.00
-+ Quartile 4 (P99): 419.00
++ P10: 4.00
++ P20: 4.00
++ P30: 4.00
++ P40: 6.00
++ P50: 11.00
++ P60: 11.00
++ P70: 11.00
++ P80: 38.00
++ P90: 102.75
++ P100: 485.00
 
-## Node 127.0.0.1:30002
-### Config
-- hash-max-listpack-value=64
-### Analysis
-- hashtable keys found: 1504/3343 (44.99% of all hash keys)
-- hash fields count: 6686
-- largest hash field: item:1173.description, size:477 
-- avg field size: 13.00
-- hash fields' size distribution:
-+ Quartile 1 (P25): 5.00
-+ Quartile 2 (P50): 21.50
-+ Quartile 3 (P75): 49.94
-+ Quartile 4 (P99): 426.00
-
-## Node 127.0.0.1:30003
-### Config
-- hash-max-listpack-value=64
-### Analysis
-- hashtable keys found: 1518/3329 (45.60% of all hash keys)
-- hash fields count: 6658
-- largest hash field: item:1291.description, size:466 
-- avg field size: 13.00
-- hash fields' size distribution:
-+ Quartile 1 (P25): 5.00
-+ Quartile 2 (P50): 19.89
-+ Quartile 3 (P75): 50.84
-+ Quartile 4 (P99): 420.00
-
-## Node 
-### Config
-- hash-max-listpack-value=
-### Analysis
-- hashtable keys found: 4574/10000 (45.74% of all hash keys)
-- hash fields count: 20000
-- largest hash field: item:6720.description, size:482 
-- avg field size: 13.00
-- hash fields' size distribution:
-+ Quartile 1 (P25): 5.00
-+ Quartile 2 (P50): 19.88
-+ Quartile 3 (P75): 50.54
-+ Quartile 4 (P99): 422.33
-
-# List Datatype Analysis
-## Node 127.0.0.1:30001
-### Config
+## List Datatype
+### Node 127.0.0.1:6379
+#### Config
 - list-max-listpack-size=-2
 - list-compress-depth=0
-### Analysis
+#### Analysis
 N/A (no keys found)
 
-## Node 127.0.0.1:30002
-### Config
-- list-max-listpack-size=-2
-- list-compress-depth=0
-### Analysis
+## Set Datatype
+### Node 127.0.0.1:6379
+#### Config
+- set-max-listpack-value=64
+- set-max-listpack-entries=128
+#### Analysis
 N/A (no keys found)
 
-## Node 127.0.0.1:30003
-### Config
-- list-max-listpack-size=-2
-- list-compress-depth=0
-### Analysis
-N/A (no keys found)
-
-## Node 
-### Config
-- list-max-listpack-size=
-- list-compress-depth=
-### Analysis
+## Sorted Set Datatype
+### Node 127.0.0.1:6379
+#### Config
+- zset-max-listpack-value=64
+- zset-max-listpack-entries=128
+#### Analysis
 N/A (no keys found)
 ```

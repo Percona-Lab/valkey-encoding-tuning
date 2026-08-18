@@ -22,8 +22,8 @@ func makeZSetMetrics() ZSetMetrics {
 	return ZSetMetrics{elementStats: makeSizeStats()}
 }
 
-func (v *ValkeyNode) analyzeZSet() error {
-	return v.analyze(zsetDt,
+func (v *ValkeyNode) analyzeZSet(db int64) error {
+	return v.analyze(db, zsetDt,
 		func(count int) {
 			v.ZSetMetrics.objCnt += count
 		},
