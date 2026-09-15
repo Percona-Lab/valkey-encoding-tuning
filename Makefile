@@ -46,3 +46,7 @@ test: fmt vet
 .PHONY: build
 build: fmt vet
 	$(GO) build -o bin/valkey-encoding-analyzer cmd/*.go
+
+.PHONY: install
+install: build
+	cp bin/valkey-encoding-analyzer /usr/local/bin/
