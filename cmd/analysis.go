@@ -70,7 +70,8 @@ type quantiler interface {
 func quantileDistribution(q quantiler) []float64 {
 	distribution := make([]float64, 10)
 	for i := range distribution {
-		distribution[i] = q.Quantile(float64(i+1) / 10)
+		percentile := float64(i+1) / 10
+		distribution[i] = q.Quantile(percentile)
 		if math.IsNaN(distribution[i]) {
 			distribution[i] = -1
 		}
