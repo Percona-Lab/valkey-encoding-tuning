@@ -112,7 +112,7 @@ func (a Analysis) renderHashMarkdown() string {
 	fmt.Fprintf(&sb, "- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", hashTableCount, objCount, (float64(hashTableCount) / float64(objCount) * 100))
 	fmt.Fprintf(&sb, "- hash fields count: %d\n", metrics[kFieldCnt].(int))
 	fmt.Fprintf(&sb, "- hash with most entries: %s, count:%d\n", metrics[kMaxEntries].(string), metrics[kMaxEntriesCnt].(int))
-	fmt.Fprintf(&sb, "- largest hash field: %s, size:%d \n", metrics[kMaxElement].(string), metrics[kMaxElementSize].(int))
+	fmt.Fprintf(&sb, "- largest element: %s, size:%d \n", metrics[kMaxElement].(string), metrics[kMaxElementSize].(int))
 	fmt.Fprintf(&sb, "- avg field size: %.2f\n", metrics[kAvgElementSize].(float64))
 	fmt.Fprintln(&sb, "- hash fields' size distribution:")
 	for i, value := range metrics[kDistribution].([]float64) {

@@ -71,7 +71,7 @@ func TestRenderHashMarkdown(t *testing.T) {
 	g.Expect(output).To(ContainSubstring("- hashtable keys found: 1/2 (50.00% of all hash keys)"))
 	g.Expect(output).To(ContainSubstring("- hash fields count: 7"))
 	g.Expect(output).To(ContainSubstring("- hash with most entries: hash:2, count:5"))
-	g.Expect(output).To(ContainSubstring("- largest hash field: hash:1.large (field value), size:42"))
+	g.Expect(output).To(ContainSubstring("- largest element: hash:1.large (field value), size:42"))
 	g.Expect(strings.Count(output, "+ P")).To(Equal(10))
 }
 
