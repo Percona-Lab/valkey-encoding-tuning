@@ -15,28 +15,26 @@ const (
 	kDistribution = "distribution"
 	// number of keys that are encoded as hashtable
 	kHtKeyCnt = "hashtable_key_count"
+	// name of the largest element
+	kMaxElement = "largest_element"
+	// largest element size
+	kMaxElementSize = "largest_element_size"
+	// average element size
+	kAvgElementSize = "avg_element_size"
 
 	// Hash datatype specific
 	// number of hash fields
 	kFieldCnt = "hash_field_count"
-	// largest field (by name or value)
-	kMaxField = "largest_field"
-	// largest field size
-	kMaxFieldSize = "largest_field_size"
-	// average field name/value size
-	kAvgFieldSize = "avg_field_size"
+	// largest number of fields in one hash
+	kMaxCount = "max_field_count"
+	// hash with max field count
+	kMaxCountItem = "max_field"
 
 	// Set/ZSet datatype specific
 	// number of keys that are encoded as skiplist
 	kSlKeyCnt = "skiplist_key_count"
 	// number of elements
 	kElementsCnt = "elements_count"
-	// name of the largest element
-	kMaxElement = "largest_element"
-	// average element size
-	kAvgElementSize = "avg_element_size"
-	// largest element size
-	kMaxElementSize = "largest_element_size"
 
 	// List datatype specific
 	// largest number of nodes (estimated)
@@ -100,6 +98,8 @@ func (a Analysis) renderHashMarkdown() string {
 	fmt.Fprintf(&sb, "### Node %s\n", a.Address)
 	fmt.Fprintln(&sb, "#### Config")
 	fmt.Fprintf(&sb, "- %s=%s\n", hashMaxListpack, a.Config[hashMaxListpack])
+	fmt.Fprintf(&sb, "- %s=%s\n", hashMaxEntries, a.Config[hashMaxEntries])
+
 	fmt.Fprintln(&sb, "#### Analysis")
 
 	objCount, _ := metrics[kObjCnt].(int)
@@ -111,8 +111,8 @@ func (a Analysis) renderHashMarkdown() string {
 	hashTableCount := metrics[kHtKeyCnt].(uint64)
 	fmt.Fprintf(&sb, "- hashtable keys found: %d/%d (%.2f%% of all hash keys)\n", hashTableCount, objCount, (float64(hashTableCount) / float64(objCount) * 100))
 	fmt.Fprintf(&sb, "- hash fields count: %d\n", metrics[kFieldCnt].(int))
-	fmt.Fprintf(&sb, "- largest hash field: %s, size:%d \n", metrics[kMaxField].(string), metrics[kMaxFieldSize].(int))
-	fmt.Fprintf(&sb, "- avg field size: %.2f\n", metrics[kAvgFieldSize].(float64))
+	fmt.Fprintf(&sb, "- largest hash field: %s, size:%d \n", metrics[kMaxElement].(string), metrics[kMaxElementSize].(int))
+	fmt.Fprintf(&sb, "- avg field size: %.2f\n", metrics[kAvgElementSize].(float64))
 	fmt.Fprintln(&sb, "- hash fields' size distribution:")
 	for i, value := range metrics[kDistribution].([]float64) {
 		fmt.Fprintf(&sb, "+ P%d: %.2f\n", (i+1)*10, value)

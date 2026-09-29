@@ -3,12 +3,14 @@ package main
 import "github.com/caio/go-tdigest/v5"
 
 type sizeStats struct {
-	tdigest   *tdigest.TDigest
-	count     int
-	totalSize int
-	avgSize   float64
-	maxItem   string
-	maxSize   int
+	tdigest           *tdigest.TDigest
+	count             int
+	totalSize         int
+	avgSize           float64
+	maxSizeItem       string
+	maxSize           int
+	maxFieldCount     int
+	maxFieldCountItem string
 }
 
 func makeSizeStats() sizeStats {
@@ -26,7 +28,7 @@ func (s *sizeStats) add(item string, size int) {
 	s.avgSize = float64(s.totalSize / s.count)
 	if size > s.maxSize {
 		s.maxSize = size
-		s.maxItem = item
+		s.maxSizeItem = item
 	}
 }
 
@@ -40,7 +42,7 @@ func (s *sizeStats) merge(other *sizeStats) {
 	s.count = totalCount
 	if other.maxSize > s.maxSize {
 		s.maxSize = other.maxSize
-		s.maxItem = other.maxItem
+		s.maxSizeItem = other.maxSizeItem
 	}
 	s.tdigest.Merge(other.tdigest)
 }
