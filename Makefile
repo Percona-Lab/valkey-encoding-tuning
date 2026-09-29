@@ -50,3 +50,4 @@ build: fmt vet
 .PHONY: install
 install: build
 	cp bin/valkey-encoding-analyzer /usr/local/bin/
+	chmod +x /usr/local/bin/valkey-encoding-analyzer

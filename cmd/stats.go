@@ -44,5 +44,9 @@ func (s *sizeStats) merge(other *sizeStats) {
 		s.maxSize = other.maxSize
 		s.maxSizeItem = other.maxSizeItem
 	}
+	if other.maxFieldCount > s.maxFieldCount {
+		s.maxFieldCount = other.maxFieldCount
+		s.maxFieldCountItem = other.maxFieldCountItem
+	}
 	s.tdigest.Merge(other.tdigest)
 }

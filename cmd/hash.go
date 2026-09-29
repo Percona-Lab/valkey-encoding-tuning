@@ -90,8 +90,8 @@ func (v *ValkeyNode) getHashDatatypeAnalysis(analysis *Analysis) {
 		kFieldCnt:       v.HashMetrics.fieldStats.count,
 		kMaxElement:     v.HashMetrics.fieldStats.maxSizeItem,
 		kMaxElementSize: v.HashMetrics.fieldStats.maxSize,
-		kMaxCount:       v.HashMetrics.fieldStats.maxFieldCount,
-		kMaxCountItem:   v.HashMetrics.fieldStats.maxFieldCountItem,
+		kMaxEntriesCnt:  v.HashMetrics.fieldStats.maxFieldCount,
+		kMaxEntries:     v.HashMetrics.fieldStats.maxFieldCountItem,
 		kAvgElementSize: v.HashMetrics.fieldStats.avgSize,
 		kDistribution:   quantileDistribution(v.HashMetrics.fieldStats.tdigest),
 	}
