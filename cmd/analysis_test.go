@@ -41,6 +41,60 @@ func TestWriteJsonWritesIndentedAnalysisOutput(t *testing.T) {
 	g.Expect(decoded.Nodes[0].Address).To(Equal("node-1"))
 }
 
+func TestRenderHashMarkdown(t *testing.T) {
+	g := NewWithT(t)
+	analysis := Analysis{
+		Address: "node-1",
+		Config: map[string]string{
+			hashMaxListpack: "64",
+			hashMaxEntries:  "512",
+		},
+		Metrics: map[string]any{
+			hashDt: map[string]any{
+				kObjCnt:         2,
+				kHtKeyCnt:       uint64(1),
+				kFieldCnt:       7,
+				kMaxElement:     "hash:1.large (field value)",
+				kMaxElementSize: 42,
+				kMaxEntriesCnt:  5,
+				kMaxEntries:     "hash:2",
+				kAvgElementSize: float64(6),
+				kDistribution:   []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			},
+		},
+	}
+
+	output := analysis.renderHashMarkdown()
+
+	g.Expect(output).To(ContainSubstring("- hash-max-listpack-value=64"))
+	g.Expect(output).To(ContainSubstring("- hash-max-listpack-entries=512"))
+	g.Expect(output).To(ContainSubstring("- hashtable keys found: 1/2 (50.00% of all hash keys)"))
+	g.Expect(output).To(ContainSubstring("- hash fields count: 7"))
+	g.Expect(output).To(ContainSubstring("- hash with most entries: hash:2, count:5"))
+	g.Expect(output).To(ContainSubstring("- largest hash field: hash:1.large (field value), size:42"))
+	g.Expect(strings.Count(output, "+ P")).To(Equal(10))
+}
+
+func TestRenderHashMarkdownWithNoKeys(t *testing.T) {
+	g := NewWithT(t)
+	analysis := Analysis{
+		Address: "node-1",
+		Config: map[string]string{
+			hashMaxListpack: "64",
+			hashMaxEntries:  "512",
+		},
+		Metrics: map[string]any{
+			hashDt: map[string]any{
+				kObjCnt: 0,
+			},
+		},
+	}
+
+	output := analysis.renderHashMarkdown()
+
+	g.Expect(output).To(ContainSubstring("N/A (no keys found)"))
+}
+
 func TestRenderSetMarkdown(t *testing.T) {
 	g := NewWithT(t)
 	analysis := Analysis{

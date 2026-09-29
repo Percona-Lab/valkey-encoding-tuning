@@ -20,7 +20,6 @@ const (
 var (
 	options          = defaultOptions()
 	flagsInitialized *flag.FlagSet
-	scanAllType      bool
 )
 
 type Options struct {
@@ -36,6 +35,7 @@ type Options struct {
 	PrintOutput    bool
 	OutputFile     string
 	Databases      []int64
+	ScanAllType    bool
 }
 
 type ValkeyNode struct {
@@ -202,25 +202,25 @@ func analyzeNode(v *ValkeyNode, db int64) (Analysis, error) {
 	}
 
 	var analysis Analysis
-	if scanAllType || options.HashKeyPattern != "" {
+	if options.ScanAllType || options.HashKeyPattern != "" {
 		if err := v.analyzeHash(db); err != nil {
 			return Analysis{}, fmt.Errorf("analyze hash keys for database '%d' on node %s: %w", db, v.Address, err)
 		}
 		v.getHashDatatypeAnalysis(&analysis)
 	}
-	if scanAllType || options.ListKeyPattern != "" {
+	if options.ScanAllType || options.ListKeyPattern != "" {
 		if err := v.analyzeList(db); err != nil {
 			return Analysis{}, fmt.Errorf("analyze list keys for database '%d'  on node %s: %w", db, v.Address, err)
 		}
 		v.getListDatatypeAnalysis(&analysis)
 	}
-	if scanAllType || options.SetKeyPattern != "" {
+	if options.ScanAllType || options.SetKeyPattern != "" {
 		if err := v.analyzeSet(db); err != nil {
 			return Analysis{}, fmt.Errorf("analyze set keys for database '%d' on node %s: %w", db, v.Address, err)
 		}
 		v.getSetDatatypeAnalysis(&analysis)
 	}
-	if scanAllType || options.ZSetKeyPattern != "" {
+	if options.ScanAllType || options.ZSetKeyPattern != "" {
 		if err := v.analyzeZSet(db); err != nil {
 			return Analysis{}, fmt.Errorf("analyze zset keys for database '%d' on node %s: %w", db, v.Address, err)
 		}
@@ -231,7 +231,7 @@ func analyzeNode(v *ValkeyNode, db int64) (Analysis, error) {
 
 func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 	fmt.Printf("# DB %d Analysis\n", output.Database)
-	if scanAllType || options.HashKeyPattern != "" {
+	if options.ScanAllType || options.HashKeyPattern != "" {
 		fmt.Println("## Hash Datatype")
 		for _, analysis := range output.Nodes {
 			fmt.Println(analysis.renderHashMarkdown())
@@ -240,7 +240,7 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 			fmt.Println(output.Cluster.renderHashMarkdown())
 		}
 	}
-	if scanAllType || options.ListKeyPattern != "" {
+	if options.ScanAllType || options.ListKeyPattern != "" {
 		fmt.Println("## List Datatype")
 		for _, analysis := range output.Nodes {
 			fmt.Println(analysis.renderListMarkdown())
@@ -249,7 +249,7 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 			fmt.Println(output.Cluster.renderListMarkdown())
 		}
 	}
-	if scanAllType || options.SetKeyPattern != "" {
+	if options.ScanAllType || options.SetKeyPattern != "" {
 		fmt.Println("## Set Datatype")
 		for _, analysis := range output.Nodes {
 			fmt.Println(analysis.renderSetMarkdown())
@@ -258,7 +258,7 @@ func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
 			fmt.Println(output.Cluster.renderSetMarkdown())
 		}
 	}
-	if scanAllType || options.ZSetKeyPattern != "" {
+	if options.ScanAllType || options.ZSetKeyPattern != "" {
 		fmt.Println("## Sorted Set Datatype")
 		for _, analysis := range output.Nodes {
 			fmt.Println(analysis.renderZSetMarkdown())
@@ -327,6 +327,7 @@ func initFlags() {
 	flag.StringVar(&options.ListKeyPattern, "list-key-pattern", "", "Pattern (glob style) of the LIST keys to be analyzed")
 	flag.StringVar(&options.SetKeyPattern, "set-key-pattern", "", "Pattern (glob style) of the SET keys to be analyzed")
 	flag.StringVar(&options.ZSetKeyPattern, "zset-key-pattern", "", "Pattern (glob style) of the SORTED SET keys to be analyzed")
+	flag.BoolVar(&options.ScanAllType, "scan-all-types", options.ScanAllType, "Analyze all datatypes")
 	flag.BoolVar(&options.PrintOutput, "print-output", options.PrintOutput, "Print output to stdout")
 	flag.StringVar(&options.OutputFile, "output-file", "", "Output file name")
 	flag.Func("database", "Comma-separated list of database to analyze, default to '0'", func(s string) error {
@@ -370,8 +371,6 @@ func main() {
 		slices.Sort(options.Databases)
 		options.Databases = slices.Compact(options.Databases)
 	}
-	// find which datatype to scan
-	scanAllType = options.HashKeyPattern != "" && options.ListKeyPattern != "" && options.SetKeyPattern != "" && options.ZSetKeyPattern != ""
 	v := makeValkeyNode(options.Address)
 	if _, err := runClusterAnalysis(v); err != nil {
 		fmt.Fprintln(os.Stderr, err)

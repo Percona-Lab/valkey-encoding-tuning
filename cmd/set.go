@@ -72,7 +72,7 @@ func (v *ValkeyNode) getSetDatatypeAnalysis(analysis *Analysis) {
 		kObjCnt:         metrics.objCnt,
 		kHtKeyCnt:       metrics.htCnt,
 		kElementsCnt:    metrics.elementStats.count,
-		kMaxElement:     metrics.elementStats.maxItem,
+		kMaxElement:     metrics.elementStats.maxSizeItem,
 		kMaxElementSize: metrics.elementStats.maxSize,
 		kAvgElementSize: metrics.elementStats.avgSize,
 		kDistribution:   quantileDistribution(metrics.elementStats.tdigest),

@@ -107,7 +107,7 @@ func TestAnalyzeZSetMembersUpdatesMemberMetrics(t *testing.T) {
 
 	g.Expect(v.ZSetMetrics.elementStats.count).To(Equal(4))
 	g.Expect(v.ZSetMetrics.elementStats.maxSize).To(Equal(len(longMember)))
-	g.Expect(v.ZSetMetrics.elementStats.maxItem).To(Equal("zset:1." + longMember))
+	g.Expect(v.ZSetMetrics.elementStats.maxSizeItem).To(Equal("zset:1." + longMember))
 	g.Expect(v.ZSetMetrics.elementStats.avgSize).To(Equal(float64((len(shortMember) + len(mediumMember) + len(longMember) + len(otherMember)) / 4)))
 	g.Expect(v.ZSetMetrics.elementStats.tdigest.Count()).To(Equal(uint64(4)))
 }
@@ -142,7 +142,7 @@ func TestGetZSetDatatypeAnalysisPopulatesStruct(t *testing.T) {
 	v.ZSetMetrics.objCnt = 1
 	v.ZSetMetrics.elementStats.count = 2
 	v.ZSetMetrics.skipListCnt = 1
-	v.ZSetMetrics.elementStats.maxItem = "zset:1.large"
+	v.ZSetMetrics.elementStats.maxSizeItem = "zset:1.large"
 	v.ZSetMetrics.elementStats.maxSize = 5
 	v.ZSetMetrics.elementStats.avgSize = 3
 
@@ -173,7 +173,7 @@ func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	cluster.elementStats.count = 2
 	cluster.elementStats.avgSize = 2
 	cluster.skipListCnt = 1
-	cluster.elementStats.maxItem = "zset:1.small"
+	cluster.elementStats.maxSizeItem = "zset:1.small"
 	cluster.elementStats.maxSize = 5
 	cluster.elementStats.tdigest.Add(2)
 
@@ -182,7 +182,7 @@ func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	node.elementStats.count = 3
 	node.elementStats.avgSize = 6
 	node.skipListCnt = 2
-	node.elementStats.maxItem = "zset:2.large"
+	node.elementStats.maxSizeItem = "zset:2.large"
 	node.elementStats.maxSize = 12
 	node.elementStats.tdigest.Add(6)
 
@@ -192,7 +192,7 @@ func TestUpdateZSetStatisticsMergesNodeMetrics(t *testing.T) {
 	g.Expect(cluster.elementStats.count).To(Equal(5))
 	g.Expect(cluster.elementStats.avgSize).To(Equal(4.4))
 	g.Expect(cluster.skipListCnt).To(Equal(uint64(3)))
-	g.Expect(cluster.elementStats.maxItem).To(Equal("zset:2.large"))
+	g.Expect(cluster.elementStats.maxSizeItem).To(Equal("zset:2.large"))
 	g.Expect(cluster.elementStats.maxSize).To(Equal(12))
 	g.Expect(cluster.elementStats.tdigest.Count()).To(Equal(uint64(2)))
 }

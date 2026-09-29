@@ -1,0 +1,43 @@
+[
+  {
+    "Database": 0,
+    "nodes": [
+      {
+        "address": "127.0.0.1:6379",
+        "config": {
+          "hash-max-listpack-entries": "512",
+          "hash-max-listpack-value": "64"
+        },
+        "metrics": {
+          "hash": {
+            "avg_element_size": 1,
+            "distribution": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "hash_field_count": 2,
+            "hashtable_key_count": 0,
+            "largest_element": "hash:1.k (field name)",
+            "largest_element_size": 1,
+            "max_entries": "hash:1",
+            "max_entries_count": 1,
+            "object_count": 1
+          }
+        }
+      }
+    ],
+    "cluster": {
+      "address": "",
+      "config": null,
+      "metrics": null
+    }
+  }
+]

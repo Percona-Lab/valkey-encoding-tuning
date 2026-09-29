@@ -154,6 +154,7 @@ func TestAnalyzeCluster(t *testing.T) {
 		g := NewWithT(t)
 		setTestFlag(t, "database", "0")
 		setTestFlag(t, "print-output", "false")
+		setTestFlag(t, "scan-all-types", "true")
 		parseArguments()
 
 		summaries := analyzeCluster(makeValkeyNode(address))
@@ -191,6 +192,7 @@ func TestAnalyzeClusterMultipleDatabases(t *testing.T) {
 		g := NewWithT(t)
 		setTestFlag(t, "database", "0,1,2")
 		setTestFlag(t, "print-output", "false")
+		setTestFlag(t, "scan-all-types", "true")
 		parseArguments()
 
 		results, err := analyzeClusterData(makeValkeyNode(address))
@@ -199,7 +201,7 @@ func TestAnalyzeClusterMultipleDatabases(t *testing.T) {
 		for db, keyCount := range keyCounts {
 			g.Expect(results[db].Database).To(Equal(int64(db)))
 			g.Expect(results[db].Summary.HashMetrics.objCnt).To(Equal(keyCount))
-			g.Expect(results[db].Summary.HashMetrics.fieldStats.maxItem).
+			g.Expect(results[db].Summary.HashMetrics.fieldStats.maxSizeItem).
 				To(HavePrefix(fmt.Sprintf("{db%d}", db)))
 		}
 	})
