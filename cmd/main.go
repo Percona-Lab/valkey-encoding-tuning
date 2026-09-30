@@ -230,6 +230,9 @@ func analyzeNode(v *ValkeyNode, db int64) (Analysis, error) {
 }
 
 func renderClusterAnalysis(output AnalysisOutput, isCluster bool) {
+	if isCluster {
+		output.Cluster.Address = "(Cluster Summary)"
+	}
 	fmt.Printf("# DB %d Analysis\n", output.Database)
 	if options.ScanAllType || options.HashKeyPattern != "" {
 		fmt.Println("## Hash Datatype")
